@@ -13,6 +13,7 @@ from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
 
 # ------------------------ 单次运行函数 ------------------------
+# -------------------- Single-run function -------------------
 def run_single_setting(X_real, config_dict):
     # config_dict = {k: v for k, v in config_dict.items() if
     #                k in ['nonlinearity', 'interaction', 'sparse_beta', 'skewness_level', 'heterogeneous', 'true_effect',
@@ -24,7 +25,7 @@ def run_single_setting(X_real, config_dict):
     result = run_doubleml_plr_rf(X, D, Y)
     return result
 
-# ------------------------ 实验配置函数 ------------------------
+# ------------------------ 实验配置函数  configuration function ------------------------
 def get_experiment_configs():
     default_config = {
         'nonlinearity': False,  # f(X) 为线性
@@ -69,7 +70,7 @@ def get_experiment_configs():
 
     return merged_configs
 
-# ------------------------ 实验执行函数 ------------------------
+# ------------------------ 实验执行函数 execution function------------------------
 def run_experiments(X_real, configs):
     all_summary = []
     all_estimates = []  # 用于绘制QQ图
@@ -118,7 +119,7 @@ def run_experiments(X_real, configs):
     df = df[cols]
     return df, all_estimates
 
-# ------------------------ 可视化函数 ------------------------
+# ------------------------ 可视化函数 visualization function------------------------
 def plot_relative_differences(df, save_dir):
     # baseline = df[df['config_name'].str.contains("基准")].iloc[0]
     baseline = df[df['config_name'] == '0_基准'].iloc[0]
@@ -159,7 +160,7 @@ def plot_relative_differences(df, save_dir):
     plt.savefig(os.path.join(save_dir, "indicator_Summary.png"))
     plt.close()
 
-# ------------------------ QQ图绘制函数 ------------------------
+# ------------------------ QQ图绘制函数 QQ graph drawing function------------------------
 # def plot_qq_distribution(theta_list, save_dir):
 #     plt.figure(figsize=(6, 6))
 #     stats.probplot(theta_list, dist="norm", plot=plt)
@@ -191,6 +192,7 @@ def plot_qq_distribution(all_estimates, save_dir):
 
 
 # ------------------------ 主函数：运行实验，保存结果并打印输出 ------------------------
+# -- main function: Run, save the results and print the output--
 def main():
     # 自动创建结果文件夹 exp_i
     existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
@@ -215,5 +217,6 @@ def main():
 # ------------------------ 调用主函数 ------------------------
 # 忽略警告信息，保持输出整洁
 warnings.filterwarnings('ignore')
+
 if __name__ == "__main__":
     main()
