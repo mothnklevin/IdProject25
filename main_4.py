@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import warnings
 import scipy.stats as stats
 import gc
+from collections import defaultdict
 
 
 from DGP_1 import load_twins_X, generate_controlled_dgp
@@ -67,16 +68,21 @@ def plot_relative_differences(df, save_dir):
     plt.close()
 
 # ------------------------ QQ图绘制函数 QQ graph drawing function------------------------
-# def plot_qq_distribution(theta_list, save_dir):
-#     plt.figure(figsize=(6, 6))
-#     stats.probplot(theta_list, dist="norm", plot=plt)
-#     plt.title("Quantile-Quantile Plot of Theta Estimates")
-
 def plot_qq_distribution(all_estimates, save_dir):
-    from collections import defaultdict
     grouped = defaultdict(list)
-    for cfg, val in all_estimates:
-        grouped[cfg].append(val)
+    all_z_vals = []
+    # for cfg, val in all_estimates:
+    #     grouped[cfg].append(val)
+    for cfg, theta, se, true_effect in all_estimates:
+        z = (theta - true_effect) / se
+        grouped[cfg].append(z)
+        all_z_vals.append(z)
+
+    # 动态范围设置
+    z_min, z_max = min(all_z_vals), max(all_z_vals)
+    margin = 0.2
+    x_min = z_min - margin
+    x_max = z_max + margin
 
     plt.figure(figsize=(7, 7))
     colors = plt.cm.tab10.colors  # 最多支持10种配置颜色
@@ -85,7 +91,8 @@ def plot_qq_distribution(all_estimates, save_dir):
         osm, osr = stats.probplot(vals, dist="norm", fit=False)
         plt.scatter(osm, osr, label=cfg, color=colors[i % 10])
 
-    plt.plot([-2, 2], [-2, 2], 'r--', label='y=x')
+    # plt.plot([-2, 2], [-2, 2], 'r--', label='y=x')
+    plt.plot([x_min, x_max], [x_min, x_max], 'r--', label='y=x')
     plt.xlabel("Theoretical Quantiles")
     plt.ylabel("Ordered Values")
     plt.title("Quantile-Quantile Plot of Theta Estimates by Config")
@@ -149,7 +156,7 @@ def run_experiments(X_real, configs):
     for config in configs:
         estimates = []
         std_errors = []
-        for run in range(5):
+        for run in range(20):
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
@@ -166,8 +173,10 @@ def run_experiments(X_real, configs):
         summary.update(metrics)
         all_summary.append(summary)
         # all_estimates.extend(estimates) # 无颜色分组
-        for est in estimates: # 有颜色分组
-            all_estimates.append((config['config_name'], est))
+        # for est in estimates: # 有颜色分组
+        #     all_estimates.append((config['config_name'], est))
+        for est, se in zip(estimates, std_errors): # 添加标准化参数
+            all_estimates.append((config['config_name'], est, se, config['true_effect']))
 
         # 输出配置结果
         print(f"\n=== {config['config_name']} ===")
