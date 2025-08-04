@@ -29,6 +29,7 @@ def manual_1_dgp(n_samples=800, seed=60):
     # 1 simply random
     # d = 5  # 设定维度：兴趣度、容忍度 + 3个背景偏好
     # X = np.random.normal(0, 1, size=(n_samples, d))
+
     # 2
     interest = np.random.normal(0, 1, size=n_samples)
     tolerance = np.random.normal(0, 1, size=n_samples)
