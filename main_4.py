@@ -213,7 +213,7 @@ def main():
     USE_MANUAL = True  # 切换数据加载模式
     # 载入数据
     if USE_MANUAL:
-        X_real = manual_1_dgp(n_samples=800, seed=60)
+        X_real = manual_1_dgp(n_samples=800, seed=60) # change manual number
     else:
         X_real = load_twins_X('./assets/twins/twin_pairs_X_3years_samesex.csv', n_samples=800, seed=60)
     # 载入配置

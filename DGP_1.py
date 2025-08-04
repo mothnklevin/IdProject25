@@ -26,8 +26,18 @@ def load_twins_X(file_path, n_samples=500, seed=42):
 
 def manual_1_dgp(n_samples=800, seed=60):
     np.random.seed(seed)
-    d = 5  # 设定维度：兴趣度、容忍度 + 3个背景偏好
-    X = np.random.normal(0, 1, size=(n_samples, d))
+    # 1 simply random
+    # d = 5  # 设定维度：兴趣度、容忍度 + 3个背景偏好
+    # X = np.random.normal(0, 1, size=(n_samples, d))
+    # 2
+    interest = np.random.normal(0, 1, size=n_samples)
+    tolerance = np.random.normal(0, 1, size=n_samples)
+
+    gender = np.random.binomial(1, 0.7, size=n_samples) # 假设性别具有倾向性 Assume gender have tendency
+    age = np.random.normal(35, 10, size=n_samples)  # 假设年龄区间 Assume the age range
+    income = 2000 + 150 * age + np.random.normal(0, 500, size=n_samples)  # 假设收入与年龄正相关 Assume income is positively correlated with age
+
+    X = np.vstack([interest, tolerance, gender, age, income]).T
 
     # 标准化特征
     scaler = StandardScaler()
