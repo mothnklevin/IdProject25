@@ -4,7 +4,7 @@ from EVAL_3 import evaluate_dml_results
 from main_4 import plot_qq_distribution
 import os
 
-def run_synthetic_qq_test(n=500, d=5, n_runs=20, true_theta=1.0, save_dir="test_qq_output"):
+def run_synthetic_qq_test(n=500, d=5, n_runs=50, true_theta=1.0, save_dir="test_qq_output"):
     os.makedirs(save_dir, exist_ok=True)
     all_estimates = []
     np.random.seed(0)

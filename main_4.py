@@ -9,20 +9,22 @@ import gc
 from collections import defaultdict
 
 
-from DGP_1 import load_twins_X, generate_controlled_dgp
+from DGP_1 import load_twins_X, generate_controlled_dgp, manual_1_dgp, generate_controlled_dgp_1
 from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
 
 # ------------------------ 单次运行函数 ------------------------
 # -------------------- Single-run function -------------------
-def run_single_setting(X_real, config_dict):
+def run_single_setting(X_real, config_dict,USE_MANUAL=False):
     # config_dict = {k: v for k, v in config_dict.items() if
     #                k in ['nonlinearity', 'interaction', 'sparse_beta', 'skewness_level', 'heterogeneous', 'true_effect',
     #                      'noise_std', 'random_seed']}
     # 直接删除 config_name 字段
     dgp_config  = {k: v for k, v in config_dict.items() if k != 'config_name'}
-
-    X, D, Y = generate_controlled_dgp(X_real=X_real, **dgp_config )
+    if USE_MANUAL == True:
+        X, D, Y = generate_controlled_dgp_1(X_real=X_real, **dgp_config)
+    else:
+        X, D, Y = generate_controlled_dgp(X_real=X_real, **dgp_config)
     result = run_doubleml_plr_rf(X, D, Y)
     return result
 
@@ -149,18 +151,18 @@ def get_experiment_configs():
     return merged_configs
 
 # ------------------------ 实验执行函数 execution function------------------------
-def run_experiments(X_real, configs):
+def run_experiments(X_real, configs,USE_MANUAL):
     all_summary = []
     all_estimates = []  # 用于绘制QQ图
 
     for config in configs:
         estimates = []
         std_errors = []
-        for run in range(20):
+        for run in range(50):
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
-                result = run_single_setting(X_real, config_run)
+                result = run_single_setting(X_real, config_run,USE_MANUAL)
                 estimates.append(result['theta_hat'])
                 std_errors.append(result['se'])
             except Exception as e:
@@ -208,14 +210,18 @@ def main():
     save_dir = f"exp_{exp_id}"
     os.makedirs(save_dir, exist_ok=True)
 
-    # 载入数据 & 配置
-    X_real = load_twins_X('./assets/twins/twin_pairs_X_3years_samesex.csv', n_samples=800, seed=60)
+    USE_MANUAL = True  # 切换数据加载模式
+    # 载入数据
+    if USE_MANUAL:
+        X_real = manual_1_dgp(n_samples=800, seed=60)
+    else:
+        X_real = load_twins_X('./assets/twins/twin_pairs_X_3years_samesex.csv', n_samples=800, seed=60)
+    # 载入配置
     configs = get_experiment_configs()
 
     # 运行实验
-    df, all_estimates = run_experiments(X_real, configs)
+    df, all_estimates = run_experiments(X_real, configs, USE_MANUAL)
     df.to_csv(os.path.join(save_dir, "dml_experiment_summary.csv"), index=False)
-
 
     # 可视化
     plot_relative_differences(df, save_dir)

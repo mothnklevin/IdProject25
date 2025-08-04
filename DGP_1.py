@@ -24,6 +24,17 @@ def load_twins_X(file_path, n_samples=500, seed=42):
 
     return X_scaled
 
+def manual_1_dgp(n_samples=800, seed=60):
+    np.random.seed(seed)
+    d = 5  # 设定维度：兴趣度、容忍度 + 3个背景偏好
+    X = np.random.normal(0, 1, size=(n_samples, d))
+
+    # 标准化特征
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    return X_scaled
+
 
 def generate_controlled_dgp(X_real: np.ndarray,
                              true_effect: float = 1.0,
@@ -46,18 +57,11 @@ def generate_controlled_dgp(X_real: np.ndarray,
     n, d = X_real.shape
     X = X_real.copy()
 
-
-
     # 倾向评分控制：生成 D
     gamma = np.random.normal(loc=0.0, scale=skewness_level, size=d)
     logits = X @ gamma
     p_score = expit(logits) # 使用稳定 sigmoid
     p_score = np.clip(p_score, 1e-6, 1 - 1e-6) # 避免出现 0/1 导致 binomial 报错
-    # 强制调试输出
-    # print("倾向得分分布: min =", p_score.min(), ", max =", p_score.max())
-    # print("X 均值范围:", X.mean(axis=0).min(), "-", X.mean(axis=0).max())
-    # print("X 方差范围:", X.std(axis=0).min(), "-", X.std(axis=0).max())
-    # print("logits 范围:", logits.min(), "-", logits.max())
 
     D = np.random.binomial(1, p_score)
     # 如果 D 只有一个值，则重新采样 gamma 或报错
@@ -90,5 +94,57 @@ def generate_controlled_dgp(X_real: np.ndarray,
     #  交互项控制：加入 D·X₀ 项 ： add D·X₀
     if interaction:
         Y += 0.5 * D * X[:, 0]
+
+    return X, D, Y
+
+def generate_controlled_dgp_1(X_real: np.ndarray,
+                             true_effect: float = 1.0,
+                             noise_std: float = 1.0,
+                             nonlinearity: bool = False,
+                             interaction: bool = False,
+                             skewness_level: float = 0.3,
+                             sparse_beta: bool = False, # 保留参数用于兼容main代码运行，无意义
+                             heterogeneous: bool = False,
+                             random_seed: int = 42):
+
+    # 将原结构替换为基于“兴趣+容忍度”机制的人工行为建模。
+    # X_real 不再来自真实数据，而是通过 manual_1_dgp 构造
+
+    np.random.seed(random_seed)
+    n, d = X_real.shape
+    X = X_real.copy()
+
+    # 映射变量
+    interest = X[:, 0]      # 兴趣度
+    tolerance = X[:, 1]     # 广告容忍度
+    background = X[:, 2:5]  # 3个无关但有影响的背景变量
+
+    # 倾向得分：决定是否点击广告
+    logits = 1.5 * interest + 1.0 * tolerance
+    p_score = expit(logits)
+    p_score = np.clip(p_score, 1e-6, 1 - 1e-6)
+    D = np.random.binomial(1, p_score)
+
+    # 背景变量已定义，暂裁去稀疏性 delete sparse_beta
+
+    # 非线性
+    if nonlinearity:
+        f_X = np.sin(background[:, 0]) + background[:, 1] ** 2
+    else:
+        f_X = background @ np.random.uniform(-1, 1, size=background.shape[1])
+
+    # 异质或固定因果效应
+    if heterogeneous:
+        theta = true_effect + 0.4 * interest
+    else:
+        theta = true_effect
+
+    # 构造结果变量 Y
+    eps = np.random.normal(0, noise_std, size=n)
+    Y = theta * D + f_X + eps
+
+    # 交互结构 D·X0
+    if interaction:
+        Y += 0.5 * D * interest
 
     return X, D, Y
