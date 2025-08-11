@@ -3,10 +3,12 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 
 def run_doubleml_plr_rf(X, D, Y, n_folds=5, seed=60):
     dml_data = DoubleMLData.from_arrays(X, Y, D)
+
+    #  PLR 允许使用回归器拟合二元D，因此将ml_m也直接使用RF回归拟合，作为基本模型
     model = DoubleMLPLR(
         dml_data,
         ml_l=RandomForestRegressor(random_state=seed),
-        ml_m=RandomForestClassifier(random_state=seed),
+        ml_m=RandomForestRegressor(random_state=seed),
         n_folds=n_folds,
     )
     model.fit()

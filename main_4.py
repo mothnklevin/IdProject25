@@ -8,25 +8,27 @@ import scipy.stats as stats
 import gc
 from collections import defaultdict
 
+from DGP_1 import generate_dgp
 
-from DGP_1 import load_twins_X, generate_controlled_dgp, manual_1_dgp, generate_controlled_dgp_1
 from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
 
+
+# 全局默认参数设置
+N_SAMPLES = 800   # 生成数据的样本量（X 的行数）
+D_DIM = 10        # 特征维度（X 的列数）
+DGP_NUM = 0       # 选择结构：0=通用二元；1=兴趣-容忍度；2=CDDDHNR2018（连续处理）
+
 # ------------------------ 单次运行函数 ------------------------
 # -------------------- Single-run function -------------------
-def run_single_setting(X_real, config_dict,USE_MANUAL=False):
-    # config_dict = {k: v for k, v in config_dict.items() if
-    #                k in ['nonlinearity', 'interaction', 'sparse_beta', 'skewness_level', 'heterogeneous', 'true_effect',
-    #                      'noise_std', 'random_seed']}
-    # 直接删除 config_name 字段
-    dgp_config  = {k: v for k, v in config_dict.items() if k != 'config_name'}
-    if USE_MANUAL == True:
-        X, D, Y = generate_controlled_dgp_1(X_real=X_real, **dgp_config)
-    else:
-        X, D, Y = generate_controlled_dgp(X_real=X_real, **dgp_config)
-    result = run_doubleml_plr_rf(X, D, Y)
-    return result
+def run_single_setting(config_dict: dict, dgp_num: int = DGP_NUM):
+    # 去掉仅用于标识/打印的字段
+    seed = int(config_dict.get('random_seed', 42))
+    cfg = {k: v for k, v in config_dict.items() if k not in ['config_name', 'random_seed']}
+    # 生成数据
+    X, D, Y = generate_dgp(n=N_SAMPLES, d=D_DIM, dgp_num=dgp_num, cfg=cfg, seed=seed)
+    # 跑 DML 并返回字典结果
+    return run_doubleml_plr_rf(X, D, Y)
 
 # ------------------------ 可视化函数 visualization function------------------------
 def plot_relative_differences(df, save_dir):
@@ -71,10 +73,12 @@ def plot_relative_differences(df, save_dir):
 
 # ------------------------ QQ图绘制函数 QQ graph drawing function------------------------
 def plot_qq_distribution(all_estimates, save_dir):
+    if not all_estimates:  # 无成功结果就直接跳过
+        print("No estimates collected; skip QQ plot.")
+        return
+
     grouped = defaultdict(list)
     all_z_vals = []
-    # for cfg, val in all_estimates:
-    #     grouped[cfg].append(val)
     for cfg, theta, se, true_effect in all_estimates:
         z = (theta - true_effect) / se
         grouped[cfg].append(z)
@@ -108,23 +112,31 @@ def plot_qq_distribution(all_estimates, save_dir):
 # ------------------------ 实验配置函数  configuration function ------------------------
 def get_experiment_configs():
     default_config = { # baseline
-        'nonlinearity': False,  # f(X) 为线性
-        'interaction': False,  # 无 D·X 交互项
-        'sparse_beta': False,  # 所有特征均参与生成 Y
-        'skewness_level': 0.3,  # 倾向评分中 γ 方差较小 → D 分布较均匀
-        'heterogeneous': False,  # θ 为常数 1.0
-        'true_effect': 1.0,  # 设定真实因果效应
-        'noise_std': 1.0,  # ε 的标准差
-        'random_seed': 60  # 保证可复现性
+        'nonlinearity': 0.0,  # g(X) 非线性强度
+        'interaction': 0.0,  # D·X 交互强度
+        'sparse_k': 0,  # 稀疏线性项个数（0=全维）
+        'skewness': 0.3,  # 倾向分数 γ 的标准差（仅 dgp_num=0 使用）
+        'heterogeneous': 0.0,  # θ 的异质性强度
+        'true_effect': 1.0,  # θ 的基线值，设定真实因果效应
+        'noise_std': 1.0,  # 结果噪声ε的标准差
+        'random_seed': 60,  # 复现用种子（每次 run 会 +run 累加）
+        # 可选索引（不设则默认 0）
+        # 'interaction_idx': 0,
+        # 'hetero_idx': 0,
+        # v1 结构可选背景列范围（不设则走默认 [2,5)）
+        # 'bg_start': 2,
+        # 'bg_end': 5,
+        # v2 结构可选参数（不设则走默认）
+        # 'rho': 0.7, 's1': 1.0, 'a0': 1.0, 'a1': 0.25, 'b0': 1.0, 'b1': 0.25,
     }
 
     named_configs = [
         ("0_基准", {}),# baseline
-        ("1_非线性", {'nonlinearity': True}),# f(X) = X₀² + sin(X₁)
-        ("2_交互", {'interaction': True}),# 加入 D·X₀ 交互项
-        ("3_稀疏性", {'sparse_beta': True}),# 仅前 5 个 β 非零
-        ("4_偏态", {'skewness_level': 2.0}),# D 明显偏态（logit(X@γ)极端）
-        ("5_异质性", {'heterogeneous': True})# θ = 1.0 + 0.3·X₀
+        ("1_非线性", {'nonlinearity': 1.0}),  # 加强 g(X) 的非线性项
+        ("2_交互", {'interaction': 0.5}),  # 加入 D·X 的交互项（强度 0.5）
+        ("3_稀疏性", {'sparse_k': 5}),  # 仅前 5 个 β 非零
+        ("4_偏态", {'skewness': 2.0}),  # 更极端的倾向分布
+        ("5_异质性", {'heterogeneous': 0.3}),  # θ = θ0 + 0.3·X
         # ,
         # ("6_非线性+异质性", {
         #     'nonlinearity': True,
@@ -151,7 +163,7 @@ def get_experiment_configs():
     return merged_configs
 
 # ------------------------ 实验执行函数 execution function------------------------
-def run_experiments(X_real, configs,USE_MANUAL):
+def run_experiments(configs, dgp_num: int = DGP_NUM):
     all_summary = []
     all_estimates = []  # 用于绘制QQ图
 
@@ -162,7 +174,7 @@ def run_experiments(X_real, configs,USE_MANUAL):
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
-                result = run_single_setting(X_real, config_run,USE_MANUAL)
+                result = run_single_setting(config_run, dgp_num=dgp_num)
                 estimates.append(result['theta_hat'])
                 std_errors.append(result['se'])
             except Exception as e:
@@ -174,10 +186,8 @@ def run_experiments(X_real, configs,USE_MANUAL):
         summary = {k: v for k, v in config.items() if k != 'random_seed'}
         summary.update(metrics)
         all_summary.append(summary)
-        # all_estimates.extend(estimates) # 无颜色分组
-        # for est in estimates: # 有颜色分组
-        #     all_estimates.append((config['config_name'], est))
-        for est, se in zip(estimates, std_errors): # 添加标准化参数
+
+        for est, se in zip(estimates, std_errors): # 有颜色分组，添加标准化参数
             all_estimates.append((config['config_name'], est, se, config['true_effect']))
 
         # 输出配置结果
@@ -195,9 +205,8 @@ def run_experiments(X_real, configs,USE_MANUAL):
     df = pd.DataFrame(all_summary)
 
     # 指定输出列顺序
-    cols = ['config_name', 'nonlinearity', 'interaction', 'sparse_beta', 'skewness_level', 'heterogeneous',
-            'true_effect', 'noise_std',
-            'bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
+    cols = ['config_name', 'nonlinearity', 'interaction', 'sparse_k', 'skewness', 'heterogeneous',
+            'true_effect', 'noise_std', 'bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
     df = df[cols]
     return df, all_estimates
 
@@ -210,17 +219,15 @@ def main():
     save_dir = f"exp_{exp_id}"
     os.makedirs(save_dir, exist_ok=True)
 
-    USE_MANUAL = True  # 切换数据加载模式
-    # 载入数据
-    if USE_MANUAL:
-        X_real = manual_1_dgp(n_samples=800, seed=60) # change manual number
-    else:
-        X_real = load_twins_X('./assets/twins/twin_pairs_X_3years_samesex.csv', n_samples=800, seed=60)
+    # 选择结构：0/1/2；也可以在 CLI/环境变量里外部注入
+    # dgp_num = DGP_NUM
+    dgp_num = 2
+
     # 载入配置
     configs = get_experiment_configs()
 
     # 运行实验
-    df, all_estimates = run_experiments(X_real, configs, USE_MANUAL)
+    df, all_estimates = run_experiments(configs, dgp_num=dgp_num)
     df.to_csv(os.path.join(save_dir, "dml_experiment_summary.csv"), index=False)
 
     # 可视化
