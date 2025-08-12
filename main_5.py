@@ -2,26 +2,19 @@ import os
 import re
 import copy
 import pandas as pd
-import matplotlib.pyplot as plt
 import warnings
-import scipy.stats as stats
 import gc
-from collections import defaultdict
-
 from DGP_1 import generate_dgp
 
 from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
+from VISUAL_4 import plot_relative_differences, plot_qq_distribution, plot_hist_distribution, plot_raw_indicators
 
 
-# 全局默认参数设置
-N_SAMPLES = 800   # 生成数据的样本量（X 的行数）
-D_DIM = 10        # 特征维度（X 的列数）
-DGP_NUM = 0       # 选择结构：0=通用二元；1=兴趣-容忍度；2=CDDDHNR2018（连续处理）
 
 # ------------------------ 单次运行函数 ------------------------
 # -------------------- Single-run function -------------------
-def run_single_setting(config_dict: dict, dgp_num: int = DGP_NUM):
+def run_single_setting(config_dict: dict, dgp_num: int = 0 ):
     # 去掉仅用于标识/打印的字段
     seed = int(config_dict.get('random_seed', 42))
     cfg = {k: v for k, v in config_dict.items() if k not in ['config_name', 'random_seed']}
@@ -29,85 +22,6 @@ def run_single_setting(config_dict: dict, dgp_num: int = DGP_NUM):
     X, D, Y = generate_dgp(n=N_SAMPLES, d=D_DIM, dgp_num=dgp_num, cfg=cfg, seed=seed)
     # 跑 DML 并返回字典结果
     return run_doubleml_plr_rf(X, D, Y)
-
-# ------------------------ 可视化函数 visualization function------------------------
-def plot_relative_differences(df, save_dir):
-    # baseline = df[df['config_name'].str.contains("基准")].iloc[0]
-    baseline = df[df['config_name'] == '0_基准'].iloc[0]
-    metric_cols = ['bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
-
-    # # 单图输出
-    # for metric in metric_cols:
-    #     plt.figure(figsize=(8, 5))
-    #     diffs = df[metric] - baseline[metric]
-    #     colors = ['red' if val > 0 else 'blue' for val in diffs]
-    #     config_labels = df['config_name']
-    #     plt.bar(config_labels, diffs, color=colors)
-    #     for i, val in enumerate(diffs):
-    #         plt.text(i, val, f"{val:.4f}", ha='center', va='bottom' if val > 0 else 'top')
-    #     plt.axhline(0, color='black', linewidth=0.8, linestyle='--')
-    #     plt.ylabel(f"{metric} 变化量")
-    #     plt.title(f"相对于基准的 {metric} 变化")
-    #     plt.xticks(rotation=15)
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(save_dir, f"{metric}.png"))
-    #     plt.close()
-
-    # 总图输出
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
-    for idx, metric in enumerate(metric_cols):
-        ax = axes[idx // 3, idx % 3]
-        diffs = df[metric] - baseline[metric]
-        colors = ['red' if val > 0 else 'blue' for val in diffs]
-        config_labels = df['config_name']
-        bars = ax.bar(config_labels, diffs, color=colors)
-        for i, val in enumerate(diffs):
-            ax.text(i, val, f"{val:.4f}", ha='center', va='bottom' if val > 0 else 'top', fontsize=8)
-        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
-        ax.set_title(metric)
-        ax.set_xticks(range(len(config_labels)))
-        ax.set_xticklabels(config_labels, rotation=15, fontsize=9)
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "indicator_Summary.png"))
-    plt.close()
-
-# ------------------------ QQ图绘制函数 QQ graph drawing function------------------------
-def plot_qq_distribution(all_estimates, save_dir):
-    if not all_estimates:  # 无成功结果就直接跳过
-        print("No estimates collected; skip QQ plot.")
-        return
-
-    grouped = defaultdict(list)
-    all_z_vals = []
-    for cfg, theta, se, true_effect in all_estimates:
-        z = (theta - true_effect) / se
-        grouped[cfg].append(z)
-        all_z_vals.append(z)
-
-    # 动态范围设置
-    z_min, z_max = min(all_z_vals), max(all_z_vals)
-    margin = 0.2
-    x_min = z_min - margin
-    x_max = z_max + margin
-
-    plt.figure(figsize=(7, 7))
-    colors = plt.cm.tab10.colors  # 最多支持10种配置颜色
-
-    for i, (cfg, vals) in enumerate(grouped.items()):
-        osm, osr = stats.probplot(vals, dist="norm", fit=False)
-        plt.scatter(osm, osr, label=cfg, color=colors[i % 10])
-
-    # plt.plot([-2, 2], [-2, 2], 'r--', label='y=x')
-    plt.plot([x_min, x_max], [x_min, x_max], 'r--', label='y=x')
-    plt.xlabel("Theoretical Quantiles")
-    plt.ylabel("Ordered Values")
-    plt.title("Quantile-Quantile Plot of Theta Estimates by Config")
-    plt.legend()
-
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "Quantile-Quantile.png"))
-    plt.close()
 
 # ------------------------ 实验配置函数  configuration function ------------------------
 def get_experiment_configs():
@@ -163,7 +77,7 @@ def get_experiment_configs():
     return merged_configs
 
 # ------------------------ 实验执行函数 execution function------------------------
-def run_experiments(configs, dgp_num: int = DGP_NUM):
+def run_experiments(configs, dgp_num: int = 0):
     all_summary = []
     all_estimates = []  # 用于绘制QQ图
 
@@ -212,6 +126,11 @@ def run_experiments(configs, dgp_num: int = DGP_NUM):
 
 # ------------------------ 主函数：运行实验，保存结果并打印输出 ------------------------
 # -- main function: Run, save the results and print the output--
+# 全局默认参数设置
+N_SAMPLES = 800   # 生成数据的样本量（X 的行数）
+D_DIM = 10        # 特征维度（X 的列数）
+DGP_NUM = 2      # 选择结构：0=通用二元；1=兴趣-容忍度；2=CDDDHNR2018（连续处理）
+
 def main():
     # 自动创建结果文件夹 exp_i
     existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
@@ -230,9 +149,27 @@ def main():
     df, all_estimates = run_experiments(configs, dgp_num=dgp_num)
     df.to_csv(os.path.join(save_dir, "dml_experiment_summary.csv"), index=False)
 
+    # 可视化测试
+    # ================= 保存中间结果与配置（便于复现所有图） =================
+    # 1) 保存每次 run 的估计与标准误（供 QQ 图 / z 直方图直接复现）
+    est_df = pd.DataFrame(
+        all_estimates,
+        columns=['config_name', 'theta_hat', 'se', 'true_effect']
+    )
+    est_df['z'] = (est_df['theta_hat'] - est_df['true_effect']) / est_df['se']
+    est_df.to_csv(os.path.join(save_dir, "dml_all_estimates.csv"), index=False)
+
+    # 2) 保存实验配置表（只含配置与关键参数，便于记录环境）
+    cfg_df = pd.DataFrame(configs)
+    cfg_df.to_csv(os.path.join(save_dir, "dml_configs.csv"), index=False)
+    # =======================================================================
+
     # 可视化
+    plot_raw_indicators(df, save_dir)
     plot_relative_differences(df, save_dir)
     plot_qq_distribution(all_estimates, save_dir)
+    plot_hist_distribution(all_estimates, save_dir)
+
     print(f"\n结果与图像已保存至文件夹：{save_dir}")
 
 # ------------------------ 调用主函数 ------------------------
