@@ -16,7 +16,7 @@ from VISUAL_4 import plot_relative_differences, plot_qq_distribution, plot_hist_
 # -------------------- Single-run function -------------------
 def run_single_setting(config_dict: dict, dgp_num: int = 0 ):
     # 去掉仅用于标识/打印的字段
-    seed = int(config_dict.get('random_seed', 42))
+    seed = int(config_dict.get('random_seed', 60))
     cfg = {k: v for k, v in config_dict.items() if k not in ['config_name', 'random_seed']}
     # 生成数据
     X, D, Y = generate_dgp(n=N_SAMPLES, d=D_DIM, dgp_num=dgp_num, cfg=cfg, seed=seed)
@@ -138,7 +138,7 @@ def main():
     save_dir = f"exp_{exp_id}"
     os.makedirs(save_dir, exist_ok=True)
 
-    # 选择结构：0/1/2；也可以在 CLI/环境变量里外部注入
+    # 选择结构：0/1/2/；
     # dgp_num = DGP_NUM
     dgp_num = 2
 

@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from collections import defaultdict
 
+import warnings
+# 忽略警告信息，保持输出整洁
+warnings.filterwarnings('ignore')
+
 
 # ------------------------ 可视化函数 visualization function------------------------
 # 原始指标值合并图
@@ -197,7 +201,7 @@ def plot_hist_distribution(all_estimates, save_dir, bins=12):
 import pandas as pd
 def main():
     # ======== 1. 设置实验结果目录 ========
-    save_dir = "./exp_6"
+    save_dir = "./exp_7"
 
     # ======== 2. 读取已保存的 CSV ========
     df = pd.read_csv(os.path.join(save_dir, "dml_experiment_summary.csv"))
@@ -211,14 +215,16 @@ def main():
     ))
 
     # 完整配置表（此处暂时不直接用于作图，但可用作检查）
-    cfg_df = pd.read_csv(os.path.join(save_dir, "dml_full_configs.csv"))
+    cfg_df = pd.read_csv(os.path.join(save_dir, "dml_configs.csv"))
     print("Loaded configs:")
     print(cfg_df.head())
 
     # ======== 3. 调用已有的可视化函数 ========
+    plot_raw_indicators(df, save_dir) # 指标原始图像
     plot_relative_differences(df, save_dir)  # 相对基准变化
     plot_qq_distribution(all_estimates, save_dir)  # QQ 图
     plot_hist_distribution(all_estimates, save_dir)  # z 值直方图
+
 
     print(f"复现图像已保存到: {save_dir}")
 
