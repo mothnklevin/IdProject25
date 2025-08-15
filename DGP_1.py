@@ -5,27 +5,31 @@ from scipy.special import expit
 from scipy.linalg import toeplitz
 from typing import Dict, Any
 
+from doubleml.datasets import make_plr_CCDDHNR2018
+
+
 # -------------------- 默认参数（统一且数值化） --------------------
 DEFAULTS: Dict[str, Any] = {
     # 公共参数
     'true_effect': 1.0,       # θ 的基准截距；异质性关闭时即为因果效应常数
-    'noise_std': 1.0,         # 观测噪声 ε 的标准差
-    'nonlinearity': 0.0,      # g(X) 中非线性项的强度（0=无，>0=放大系数）
+    'noise_std': 1.0,         # 观测噪声 ε 的标准差 -- CDDDHNR2018：s2
     'interaction': 0.0,       # 交互项强度：乘在 (D * X[:, interaction_idx]) 前
     'heterogeneous': 0.0,     # 异质性强度：θ(X) = true_effect + heterogeneous * X[:, hetero_idx]
     'interaction_idx': 0,     # D·X 交互使用的列索引
     'hetero_idx': 0,          # θ(X) 里使用的列索引
 
-    # v0（通用二元处理）
+    # v0/1 公用
+    'nonlinearity': 0.0,  # g(X) 中非线性项的强度（0=无，>0=放大系数）
+    # v0专用（通用二元处理）
     'skewness': 0.3,          # 倾向评分 γ 的尺度；越大 D 越偏态/极端
     'sparse_k': 0,            # β 的非零个数；0 或 >=d 表示用全量随机 β（不稀疏）
 
-    # v1（兴趣-容忍度）
+    # v1专用（兴趣-容忍度）
     'bg_start': 2,            # 背景变量起始列（含）
     'bg_end': 5,              # 背景变量结束列（不含）
 
-    # v2（CDDDHNR2018 连续处理）
-    'rho': 0.7,               # Toeplitz 协方差里的相关系数 ρ
+    # v2专用（CDDDHNR2018 连续处理）
+    'rho': 0.7,               # Toeplitz 协方差里的相关系数 ρ,该值在官方DGP中固定为0.7
     's1': 1.0,                # 连续处理的噪声尺度（D = m0 + s1*v）
     'a0': 1.0, 'a1': 0.25,    # m0(X) 的系数（a0·x0 + a1·sigmoid(x2)）
     'b0': 1.0, 'b1': 0.25,    # g(X) 的系数（b0·sigmoid(x0) + b1·x2）
@@ -86,6 +90,21 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
         Sigma = toeplitz(first_col)                   # 构造协方差矩阵 Σ
         L = np.linalg.cholesky(Sigma)                 # Cholesky 分解：Σ = L L^T
         X = rng.standard_normal(size=(n, d)) @ L.T    # 生成相关正态：Z L^T
+    elif dgp_num == 3:
+        np.random.seed(seed)
+
+        # alpha 用 true_effect 对齐既有含义；返回数组以与现有管线一致
+        X, Y, D = make_plr_CCDDHNR2018(
+            n_obs=n,
+            dim_x=d,
+            alpha=C['true_effect'],
+            a0=C['a0'], a1=C['a1'],
+            b0=C['b0'], b1=C['b1'],
+            s1=C['s1'], s2=C['noise_std'],
+            return_type='array'
+        )
+        # 与现有接口保持一致：返回 (X, D, Y)
+        return X, D, Y
     else:
         raise ValueError(f"未知 dgp_num={dgp_num}")   # 不支持的结构号
 
