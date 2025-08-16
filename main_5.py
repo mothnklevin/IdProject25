@@ -4,8 +4,10 @@ import copy
 import pandas as pd
 import warnings
 import gc
-from DGP_1 import generate_dgp
 
+from itertools import product
+
+from DGP_1 import generate_dgp
 from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
 from VISUAL_4 import plot_relative_differences, plot_qq_distribution, plot_hist_distribution, plot_raw_indicators
@@ -14,12 +16,13 @@ from VISUAL_4 import plot_relative_differences, plot_qq_distribution, plot_hist_
 
 # ------------------------ 单次运行函数 ------------------------
 # -------------------- Single-run function -------------------
-def run_single_setting(config_dict: dict, dgp_num: int = 0 ):
+# def run_single_setting(config_dict: dict, dgp_num: int = 0 ):
+def run_single_setting(config_dict: dict, dgp_num: int = 0, n_samples: int = 800, d_dim: int = 10):
     # 去掉仅用于标识/打印的字段
     seed = int(config_dict.get('random_seed', 60))
     cfg = {k: v for k, v in config_dict.items() if k not in ['config_name', 'random_seed']}
     # 生成数据
-    X, D, Y = generate_dgp(n=N_SAMPLES, d=D_DIM, dgp_num=dgp_num, cfg=cfg, seed=seed)
+    X, D, Y = generate_dgp(n=n_samples, d=d_dim, dgp_num=dgp_num, cfg=cfg, seed=seed)
     # 跑 DML 并返回字典结果
     return run_doubleml_plr_rf(X, D, Y)
 
@@ -77,18 +80,21 @@ def get_experiment_configs():
     return merged_configs
 
 # ------------------------ 实验执行函数 execution function------------------------
-def run_experiments(configs, dgp_num: int = 0):
+# def run_experiments(configs, dgp_num: int = 0, N_RUNS = 5):
+def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int = 10, n_runs: int = 50):
+
     all_summary = []
     all_estimates = []  # 用于绘制QQ图
 
     for config in configs:
         estimates = []
         std_errors = []
-        for run in range(50):
+        for run in range(n_runs):
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
-                result = run_single_setting(config_run, dgp_num=dgp_num)
+                # result = run_single_setting(config_run, dgp_num=dgp_num)
+                result = run_single_setting(config_run, dgp_num=dgp_num, n_samples=n_samples, d_dim=d_dim)
                 estimates.append(result['theta_hat'])
                 std_errors.append(result['se'])
             except Exception as e:
@@ -124,34 +130,39 @@ def run_experiments(configs, dgp_num: int = 0):
     df = df[cols]
     return df, all_estimates
 
-# ------------------------ 主函数：运行实验，保存结果并打印输出 ------------------------
-# -- main function: Run, save the results and print the output--
+
 # 全局默认参数设置
 N_SAMPLES = 800   # 生成数据的样本量（X 的行数）
 D_DIM = 10        # 特征维度（X 的列数）
-DGP_NUM = 2      # 选择结构：0=通用二元；1=兴趣-容忍度；2=CDDDHNR2018（连续处理）
+N_RUNS = 50
+DGP_NUM = 2
 
-def main():
-    # 自动创建结果文件夹 exp_i
-    existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
-    exp_id = max(existing)+1 if existing else 1
-    save_dir = f"exp_{exp_id}"
+# 批量实验的默认参数网格
+DEFAULT_GRID = {
+    'N_SAMPLES': [100, 200, 400, 800],
+    'D_DIM': [3, 5, 10, 20, 40], # 0,1结构需要>=3
+    'DGP_NUM': [0, 1, 2, 3],
+    'N_RUNS': [50]
+}
+# 计算实验编号
+existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
+EXP_ID = max(existing) + 1 if existing else 1
+
+# 工具函数
+# 单次实验运行
+def run_one_experiment(n_samples: int, d_dim: int, dgp_num: int, n_runs: int,
+                       save_dir: str):
     os.makedirs(save_dir, exist_ok=True)
-
-    # 选择结构：0/1/2/；
-    # dgp_num = DGP_NUM
-    dgp_num = 2
-
     # 载入配置
     configs = get_experiment_configs()
-
     # 运行实验
-    df, all_estimates = run_experiments(configs, dgp_num=dgp_num)
+    df, all_estimates = run_experiments(
+        configs, dgp_num=dgp_num,
+        n_samples=n_samples, d_dim=d_dim, n_runs=n_runs
+    )
     df.to_csv(os.path.join(save_dir, "dml_experiment_summary.csv"), index=False)
 
-    # 可视化测试
-    # ================= 保存中间结果与配置（便于复现所有图） =================
-    # 1) 保存每次 run 的估计与标准误（供 QQ 图 / z 直方图直接复现）
+    # ================= 保存中间结果与配置 =================
     est_df = pd.DataFrame(
         all_estimates,
         columns=['config_name', 'theta_hat', 'se', 'true_effect']
@@ -159,22 +170,55 @@ def main():
     est_df['z'] = (est_df['theta_hat'] - est_df['true_effect']) / est_df['se']
     est_df.to_csv(os.path.join(save_dir, "dml_all_estimates.csv"), index=False)
 
-    # 2) 保存实验配置表（只含配置与关键参数，便于记录环境）
     cfg_df = pd.DataFrame(configs)
     cfg_df.to_csv(os.path.join(save_dir, "dml_configs.csv"), index=False)
     # =======================================================================
 
-    # 可视化
+    # 可视化（完全复用你现有的四个图）
     plot_raw_indicators(df, save_dir)
     plot_relative_differences(df, save_dir)
     plot_qq_distribution(all_estimates, save_dir)
     plot_hist_distribution(all_estimates, save_dir)
 
-    print(f"\n结果与图像已保存至文件夹：{save_dir}")
+    print(f"结果与图像已保存至：{save_dir}")
+    return df
+
+# ------------------------ 主函数：运行实验，保存结果并打印输出 ------------------------
+# -- main function: Run, save the results and print the output--
+def main_single():
+    root_dir  = f"exp_{EXP_ID}"
+    run_tag = f"n{N_SAMPLES}_d{D_DIM}_g{DGP_NUM}_r{N_RUNS}"
+    save_dir = os.path.join(root_dir , run_tag)
+
+    run_one_experiment(
+        n_samples=N_SAMPLES, d_dim=D_DIM, dgp_num=DGP_NUM, n_runs=N_RUNS,
+        save_dir=save_dir
+    )
+
+def main_grid():
+    root_dir = f"exp_{EXP_ID}"
+    os.makedirs(root_dir, exist_ok=True)
+
+    keys = ['N_SAMPLES', 'D_DIM', 'DGP_NUM', 'N_RUNS']
+    values = [DEFAULT_GRID.get(k, [globals()[k]]) for k in keys]
+    combos = list(product(*values))
+
+    for n_samples, d_dim, dgp_num, n_runs in combos:
+        if dgp_num not in (0, 1, 2, 3):
+            print(f"[跳过] dgp_num={dgp_num} 暂未实现；当前仅支持 0/1/2/3。")
+            continue
+        subdir = os.path.join(root_dir, f"n{n_samples}_d{d_dim}_g{dgp_num}_r{n_runs}")
+        print(f"\n运行组合: N={n_samples}, d={d_dim}, dgp={dgp_num}, runs={n_runs}")
+        run_one_experiment(
+            n_samples=n_samples, d_dim=d_dim, dgp_num=dgp_num, n_runs=n_runs,
+            save_dir=subdir
+        )
+
+    print(f"\n全部批量实验完成。根目录：{root_dir}")
 
 # ------------------------ 调用主函数 ------------------------
 # 忽略警告信息，保持输出整洁
 warnings.filterwarnings('ignore')
 
 if __name__ == "__main__":
-    main()
+    main_grid()
