@@ -44,29 +44,47 @@ def get_experiment_configs():
         # 'bg_start': 2,
         # 'bg_end': 5,
         # v2 结构可选参数（不设则走默认）
-        # 'rho': 0.7, 's1': 1.0, 'a0': 1.0, 'a1': 0.25, 'b0': 1.0, 'b1': 0.25,
+        'rho': 0.7,
+        's1': 1.0,
+        # 'a0': 1.0,
+        # 'a1': 0.25,
+        # 'b0': 1.0,
+        # 'b1': 0.25,
     }
 
     named_configs = [
         ("0_基准", {}),# baseline
-        ("1_非线性", {'nonlinearity': 1.0}),  # 加强 g(X) 的非线性项
-        ("2_交互", {'interaction': 0.5}),  # 加入 D·X 的交互项（强度 0.5）
-        ("3_稀疏性", {'sparse_k': 5}),  # 仅前 5 个 β 非零
-        ("4_偏态", {'skewness': 2.0}),  # 更极端的倾向分布
-        ("5_异质性", {'heterogeneous': 0.3}),  # θ = θ0 + 0.3·X
-        # ,
-        # ("6_非线性+异质性", {
-        #     'nonlinearity': True,
-        #     'heterogeneous': True
-        # }),
-        # ("7_稀疏+偏态", {
-        #     'sparse_beta': True,
-        #     'skewness_level': 2.0
-        # }),
-        # ("8_非线性+交互", {
-        #     'nonlinearity': True,
-        #     'interaction': True
-        # })
+        # ("1_非线性", {'nonlinearity': 1.0}),  # 加强 g(X) 的非线性项
+        # ("2_交互", {'interaction': 0.5}),  # 加入 D·X 的交互项（强度 0.5）
+        # ("3_稀疏性", {'sparse_k': 5}),  # 仅前 5 个 β 非零
+        # ("4_偏态", {'skewness': 2.0}),  # 更极端的倾向分布
+        # ("5_异质性", {'heterogeneous': 0.3}),  # θ = θ0 + 0.3·X
+
+        # 交互强度（D·X）
+        ("inter_0.25", {'interaction': 0.25}),
+        ("inter_0.5", {'interaction': 0.5}),
+        ("inter_1.0", {'interaction': 1.0}),
+
+        # 异质性 θ(X) = θ0 + h·X[:,idx]
+        ("hete_0.15", {'heterogeneous': 0.15}),
+        ("hete_0.3", {'heterogeneous': 0.3}),
+        ("hete_0.5", {'heterogeneous': 0.5}),
+
+        # 结果噪声 ε 标准差
+        ("noise_0.5", {'noise_std': 0.5}),
+        ("noise_1.0", {'noise_std': 1.0}),
+        ("noise_2.0", {'noise_std': 2.0}),
+
+        # 相关结构参数：Toeplitz 相关系数 rho（影响 X 相关性）
+        ("rho_0.3", {'rho': 0.3}),
+        ("rho_0.5", {'rho': 0.5}),
+        ("rho_0.7", {'rho': 0.7}),  # 同基线
+
+        # 连续处理强度：D = m0(X) + s1·v
+        ("s1_0.5", {'s1': 0.5}),
+        ("s1_1.0", {'s1': 1.0}),  # 同基线
+        ("s1_2.0", {'s1': 2.0}),
+
     ]
 
     merged_configs = []
@@ -139,10 +157,10 @@ DGP_NUM = 2
 
 # 批量实验的默认参数网格
 DEFAULT_GRID = {
-    'N_SAMPLES': [100, 200, 400, 800],
-    'D_DIM': [3, 5, 10, 20, 40], # 0,1结构需要>=3
-    'DGP_NUM': [0, 1, 2, 3],
-    'N_RUNS': [50]
+    'N_SAMPLES': [50, 100, 200, 400, 800],
+    'D_DIM': [10], # 0,1结构需要>=3
+    'DGP_NUM': [2, 3],
+    'N_RUNS': [100]
 }
 # 计算实验编号
 existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
