@@ -70,19 +70,21 @@ def collect_and_merge_results(exp_folder: str):
     big = pd.concat(rows, ignore_index=True)
 
     # 3) 提取“参数配置编号 config_index”以便分组输出
-    if "config_name" in big.columns:
-        idx_list, fallback = [], 0
-        for name in big["config_name"].astype(str).tolist():
-            m = RX_CFGIDX.match(name)
-            if m:
-                idx_list.append(int(m.group("idx")))
-            else:
-                idx_list.append(fallback)
-                fallback += 1
-        big["config_index"] = idx_list
-    else:
-        big["config_name"]  = "unknown"
-        big["config_index"] = range(len(big))
+    # if "config_name" in big.columns:
+    #     idx_list, fallback = [], 0
+    #     for name in big["config_name"].astype(str).tolist():
+    #         m = RX_CFGIDX.match(name)
+    #         if m:
+    #             idx_list.append(int(m.group("idx")))
+    #         else:
+    #             idx_list.append(fallback)
+    #             fallback += 1
+    #     big["config_index"] = idx_list
+    # else:
+    #     big["config_name"]  = "unknown"
+    #     big["config_index"] = range(len(big))
+    if "config_name" not in big.columns:
+        big["config_name"] = "unknown"
 
     # 4) 输出目录：<指定实验文件夹>/DataAnalysis
     out_dir = os.path.join(exp_root, "DataAnalysis")
@@ -106,12 +108,13 @@ def collect_and_merge_results(exp_folder: str):
           f"{big_out[['n_samples','d_dim','dgp_num','n_runs']].drop_duplicates().shape[0]} 个 DML 组合）")
 
     # 5) 按“参数配置”拆分写出：X 个文件（同样不包含 source_file）
-    all_cfg_idx = sorted(pd.Series(big["config_index"].unique(), dtype=int))
-    for idx in all_cfg_idx:
-        sub = big[big["config_index"] == idx].drop(columns=["source_file"], errors="ignore").copy()
+    all_cfg_names = sorted(big["config_name"].dropna().unique().tolist())
+    for name in all_cfg_names:
+        sub = big[big["config_name"] == name].drop(columns=["source_file"], errors="ignore").copy()
 
+        # 列顺序（保持你原先的 preferred_cols）
         preferred_cols = [
-            "config_index", "config_name",
+            "config_name",
             "n_samples", "d_dim", "dgp_num", "n_runs",
             "nonlinearity", "interaction", "sparse_k", "skewness",
             "heterogeneous", "true_effect", "noise_std",
@@ -121,15 +124,11 @@ def collect_and_merge_results(exp_folder: str):
                [c for c in sub.columns if c not in preferred_cols]
         sub = sub[cols]
 
-        suffix = ""
-        unique_names = sub["config_name"].dropna().unique().tolist()
-        if unique_names:
-            safe = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", str(unique_names[0]))
-            suffix = f"_{safe}"
-        out_path = os.path.join(out_dir, f"config{idx}{suffix}.csv")
+        safe = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", str(name))
+        out_path = os.path.join(out_dir, f"config_{safe}.csv")
         sub.to_csv(out_path, index=False, encoding="utf-8-sig")
         print(f"输出：{out_path} (共 {len(sub)} 行，覆盖 "
-              f"{sub[['n_samples','d_dim','dgp_num','n_runs']].drop_duplicates().shape[0]} 个 DML 组合)")
+              f"{sub[['n_samples', 'd_dim', 'dgp_num', 'n_runs']].drop_duplicates().shape[0]} 个 DML 组合)")
 
 
 def get_columns_from_agg(agg_csv_path: str):
@@ -228,15 +227,15 @@ if __name__ == "__main__":
     choose_num = 2
     if choose_num ==1:
         # 指定要处理的实验文件夹（示例："./exp_2"）
-        collect_and_merge_results("./exp_1")
+        collect_and_merge_results("./exp_3")
     elif choose_num == 2:
-        agg_file = "./exp_1/DataAnalysis/config0_0_基准.csv"
+        agg_file = "./exp_2/DataAnalysis/all_results.csv"
         if os.path.exists(agg_file):
             filter_and_plot(
                 agg_file,
-                out_dir="./exp_1/DataAnalysis/config0",
+                out_dir="./exp_2/DataAnalysis/n100_200_g2",
                 n_samples=[100, 200],
-                dgp_num=1,
+                dgp_num=2,
             )
         else:
             print("找不到示例文件，请先运行汇总步骤。")

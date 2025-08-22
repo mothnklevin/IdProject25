@@ -50,23 +50,6 @@ def plot_relative_differences(df, save_dir):
     baseline = df[df['config_name'] == '0_基准'].iloc[0]
     metric_cols = ['bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
 
-    # # 单图输出
-    # for metric in metric_cols:
-    #     plt.figure(figsize=(8, 5))
-    #     diffs = df[metric] - baseline[metric]
-    #     colors = ['red' if val > 0 else 'blue' for val in diffs]
-    #     config_labels = df['config_name']
-    #     plt.bar(config_labels, diffs, color=colors)
-    #     for i, val in enumerate(diffs):
-    #         plt.text(i, val, f"{val:.4f}", ha='center', va='bottom' if val > 0 else 'top')
-    #     plt.axhline(0, color='black', linewidth=0.8, linestyle='--')
-    #     plt.ylabel(f"{metric} 变化量")
-    #     plt.title(f"相对于基准的 {metric} 变化")
-    #     plt.xticks(rotation=15)
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(save_dir, f"{metric}.png"))
-    #     plt.close()
-
     # 总图输出
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     for idx, metric in enumerate(metric_cols):

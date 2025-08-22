@@ -8,8 +8,12 @@ def run_doubleml_plr_rf(X, D, Y, n_folds=5, seed=60):
     #  PLR 允许使用回归器拟合二元D，因此将ml_m也直接使用RF回归拟合，作为基本模型
     model = DoubleMLPLR(
         dml_data,
-        ml_l=RandomForestRegressor(random_state=seed),
-        ml_m=RandomForestRegressor(random_state=seed),
+        ml_l=RandomForestRegressor(
+            n_jobs=-1,
+            random_state=seed),
+        ml_m=RandomForestRegressor(
+            n_jobs=-1,
+            random_state=seed),
         n_folds=n_folds,
         draw_sample_splitting=False,  # 关闭自动随机抽样
     )

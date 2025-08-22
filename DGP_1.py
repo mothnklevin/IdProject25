@@ -158,7 +158,7 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
             g = g + C['nonlinearity'] * term           # 加权叠加
     # 3 Chernozhukov ： PLR DGP -- doubleml.datasets.make_plr_CCDDHNR2018
     elif dgp_num == 2:                                 # CDDDHNR2018：固定 g0 形式
-        # 注意：若 d<3 将退化为使用可用列（这里假设 d>=3 更符合标准设置）
+        # 若 d<3 将退化为使用可用列（这里假设 d>=3 更符合标准设置）
         g = C['b0'] * expit(X[:, 0]) + C['b1'] * X[:, 2]  # g0(X)
 
     # --- θ 与 Y ---
@@ -170,11 +170,11 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
     return X, D, Y                                     # 返回三元组
 
 # -------------------- 兼容层--------------------
-# 旧代码：generate_controlled_dgp(X_real, **kwargs) -> (X,D,Y)
+# generate_controlled_dgp(X_real, **kwargs) -> (X,D,Y)
 
 def generate_controlled_dgp(X_real: np.ndarray, **kwargs):
     n, d = X_real.shape                               # 从输入推断维度
-    seed = kwargs.pop('random_seed', 42)              # 读取并移除旧参数 random_seed
+    seed = kwargs.pop('random_seed', 60)              # 读取并移除旧参数 random_seed
     # 将旧参数名映射为新名
     cfg_map = {
         'skewness_level': 'skewness',
@@ -186,7 +186,7 @@ def generate_controlled_dgp(X_real: np.ndarray, **kwargs):
 
 def generate_controlled_dgp_1(X_real: np.ndarray, **kwargs):
     n, d = X_real.shape
-    seed = kwargs.pop('random_seed', 42)
+    seed = kwargs.pop('random_seed', 60)
     cfg_map = {'skewness_level': 'skewness', 'sparse_beta': 'sparse_k'}  # 键名映射
     cfg = {cfg_map.get(k, k): v for k, v in kwargs.items()}  # 应用映射
     return generate_dgp(n, d, dgp_num=1, cfg=cfg, seed=seed) # 结构1
@@ -194,7 +194,7 @@ def generate_controlled_dgp_1(X_real: np.ndarray, **kwargs):
 
 def generate_controlled_dgp_2(X_real: np.ndarray, **kwargs):
     n, d = X_real.shape
-    seed = kwargs.pop('random_seed', 42)
+    seed = kwargs.pop('random_seed', 60)
     cfg_map = {'skewness_level': 'skewness', 'sparse_beta': 'sparse_k'}  # 键名映射
     cfg = {cfg_map.get(k, k): v for k, v in kwargs.items()}  # 应用映射
     return generate_dgp(n, d, dgp_num=2, cfg=cfg, seed=seed) # 结构2

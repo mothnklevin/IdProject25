@@ -29,13 +29,16 @@ def run_single_setting(config_dict: dict, dgp_num: int = 0, n_samples: int = 800
 # ------------------------ 实验配置函数  configuration function ------------------------
 def get_experiment_configs():
     default_config = { # baseline
+        # 0/1
         'nonlinearity': 0.0,  # g(X) 非线性强度
-        'interaction': 0.0,  # D·X 交互强度
         'sparse_k': 0,  # 稀疏线性项个数（0=全维）
         'skewness': 0.3,  # 倾向分数 γ 的标准差（仅 dgp_num=0 使用）
+        # 2/3
+        'interaction': 0.0,  # D·X 交互强度
         'heterogeneous': 0.0,  # θ 的异质性强度
-        'true_effect': 1.0,  # θ 的基线值，设定真实因果效应
         'noise_std': 1.0,  # 结果噪声ε的标准差
+
+        'true_effect': 1.0,  # θ 的基线值，设定真实因果效应
         'random_seed': 60,  # 复现用种子（每次 run 会 +run 累加）
         # 可选索引（不设则默认 0）
         # 'interaction_idx': 0,
@@ -46,10 +49,10 @@ def get_experiment_configs():
         # v2 结构可选参数（不设则走默认）
         'rho': 0.7,
         's1': 1.0,
-        # 'a0': 1.0,
-        # 'a1': 0.25,
-        # 'b0': 1.0,
-        # 'b1': 0.25,
+        'a0': 1.0,
+        'a1': 0.25,
+        'b0': 1.0,
+        'b1': 0.25,
     }
 
     named_configs = [
@@ -111,7 +114,6 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
-                # result = run_single_setting(config_run, dgp_num=dgp_num)
                 result = run_single_setting(config_run, dgp_num=dgp_num, n_samples=n_samples, d_dim=d_dim)
                 estimates.append(result['theta_hat'])
                 std_errors.append(result['se'])
@@ -121,12 +123,38 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
 
         metrics = evaluate_dml_results(estimates, std_errors, true_theta=config['true_effect'])
 
+        # ---- summary：保留config全量参数 + 全局维度 + 指标 ----
         summary = {k: v for k, v in config.items() if k != 'random_seed'}
+        summary.update({
+            'n_samples': n_samples,
+            'd_dim': d_dim,
+            'dgp_num': dgp_num,
+            'n_runs': n_runs,
+        })
         summary.update(metrics)
         all_summary.append(summary)
 
-        for est, se in zip(estimates, std_errors): # 有颜色分组，添加标准化参数
-            all_estimates.append((config['config_name'], est, se, config['true_effect']))
+        # all_estimates：逐run保存全量参数
+        for run, (est, se) in enumerate(zip(estimates, std_errors)):
+            row = {
+                'config_name': config['config_name'],
+                'theta_hat': est,
+                'se': se,
+                'true_effect': config['true_effect'],
+                'z': (est - config['true_effect']) / se if se not in (0, None) else float('nan'),
+                'run_id': run,
+                'seed_used': config['random_seed'] + run,
+                # 全局维度
+                'n_samples': n_samples,
+                'd_dim': d_dim,
+                'dgp_num': dgp_num,
+                'n_runs': n_runs,
+            }
+            # 合并此配置的所有参数（含默认/更新后的完整DGP参数）
+            for k, v in config.items():
+                if k != 'random_seed' and k not in row:  # 避免覆盖已有键
+                    row[k] = v
+            all_estimates.append(row)
 
         # 输出配置结果
         print(f"\n=== {config['config_name']} ===")
@@ -142,10 +170,21 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
 
     df = pd.DataFrame(all_summary)
 
-    # 指定输出列顺序
-    cols = ['config_name', 'nonlinearity', 'interaction', 'sparse_k', 'skewness', 'heterogeneous',
-            'true_effect', 'noise_std', 'bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
-    df = df[cols]
+    # 指定输出列
+    metric_cols = ['bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
+    front = ['config_name']
+    param_cols = [c for c in df.columns if c not in front + metric_cols]
+
+    preferred = [
+        'config_name',
+        'n_samples', 'd_dim', 'dgp_num', 'n_runs',
+        'nonlinearity', 'interaction', 'sparse_k', 'skewness',
+        'heterogeneous', 'true_effect', 'noise_std',
+        'rho', 's1', 'a0', 'a1', 'b0', 'b1',
+        'interaction_idx', 'hetero_idx', 'bg_start', 'bg_end',
+        'bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate'
+    ]
+    df = df[[c for c in preferred if c in df.columns] + [c for c in df.columns if c not in preferred]]
     return df, all_estimates
 
 
@@ -158,7 +197,7 @@ DGP_NUM = 2
 # 批量实验的默认参数网格
 DEFAULT_GRID = {
     'N_SAMPLES': [50, 100, 200, 400, 800],
-    'D_DIM': [10], # 0,1结构需要>=3
+    'D_DIM': [10, 20, 30], # 0,1结构需要>=3
     'DGP_NUM': [2, 3],
     'N_RUNS': [100]
 }
@@ -181,22 +220,26 @@ def run_one_experiment(n_samples: int, d_dim: int, dgp_num: int, n_runs: int,
     df.to_csv(os.path.join(save_dir, "dml_experiment_summary.csv"), index=False)
 
     # ================= 保存中间结果与配置 =================
-    est_df = pd.DataFrame(
-        all_estimates,
-        columns=['config_name', 'theta_hat', 'se', 'true_effect']
-    )
+    est_df = pd.DataFrame(all_estimates)
     est_df['z'] = (est_df['theta_hat'] - est_df['true_effect']) / est_df['se']
     est_df.to_csv(os.path.join(save_dir, "dml_all_estimates.csv"), index=False)
 
-    cfg_df = pd.DataFrame(configs)
+    cfg_df = pd.DataFrame(configs).copy()
+    cfg_df['n_samples'] = n_samples
+    cfg_df['d_dim']     = d_dim
+    cfg_df['dgp_num']   = dgp_num
+    cfg_df['n_runs']    = n_runs
     cfg_df.to_csv(os.path.join(save_dir, "dml_configs.csv"), index=False)
     # =======================================================================
 
     # 可视化（完全复用你现有的四个图）
     plot_raw_indicators(df, save_dir)
     plot_relative_differences(df, save_dir)
-    plot_qq_distribution(all_estimates, save_dir)
-    plot_hist_distribution(all_estimates, save_dir)
+    # plot_qq_distribution(all_estimates, save_dir)
+    # plot_hist_distribution(all_estimates, save_dir)
+    _ae_legacy = [(r['config_name'], r['theta_hat'], r['se'], r['true_effect']) for r in all_estimates]
+    plot_qq_distribution(_ae_legacy, save_dir)
+    plot_hist_distribution(_ae_legacy, save_dir)
 
     print(f"结果与图像已保存至：{save_dir}")
     return df
