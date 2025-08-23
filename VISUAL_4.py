@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore')
 # 原始指标值合并图
 def plot_raw_indicators(df, save_dir):
     # 选择基线
-    baseline_row = df[df['config_name'] == '0_基准'].iloc[0]
+    baseline_row = df[df['config_name'] == '0_base'].iloc[0]
     metric_cols = ['bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
@@ -48,7 +48,7 @@ def plot_raw_indicators(df, save_dir):
 
 def plot_relative_differences(df, save_dir):
     # baseline = df[df['config_name'].str.contains("基准")].iloc[0]
-    baseline = df[df['config_name'] == '0_基准'].iloc[0]
+    baseline = df[df['config_name'] == '0_base'].iloc[0]
     metric_cols = ['bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate']
 
     # 总图输出
@@ -280,8 +280,10 @@ def main(root_dir, model_num = 1):
             est_df = pd.read_csv(est_path)
 
             # 2.2 动态识别参数列（排除逐次/中间列，其余视为参数常量列）
+            true_col = 'true_theta' if 'true_theta' in est_df.columns else 'true_effect'
+
             exclude_cols = {
-                'config_name', 'theta_hat', 'se', 'true_effect', 'z',
+                'config_name', 'theta_hat', 'se', true_col, 'z',
                 'run_id', 'seed_used'
             }
             param_cols = [c for c in est_df.columns if c not in exclude_cols]
@@ -292,10 +294,7 @@ def main(root_dir, model_num = 1):
                 estimates = g['theta_hat'].to_numpy()
                 se = g['se'].to_numpy()
 
-                te_vals = g['true_effect'].unique()
-                if len(te_vals) != 1:
-                    raise ValueError(f"{cfg} 的 true_effect 非唯一: {te_vals}")
-                true_theta = float(te_vals[0])
+                true_theta = float(g[true_col].mean())
 
                 metrics = evaluate_dml_results(estimates, se, true_theta=true_theta)
 
@@ -327,7 +326,7 @@ def main(root_dir, model_num = 1):
                 est_df['config_name'],
                 est_df['theta_hat'],
                 est_df['se'],
-                est_df['true_effect']
+                est_df[true_col]
             ))
 
             # 2.7 调用现有的四个可视化函数（输出仍保存在各自子目录）
@@ -344,5 +343,6 @@ def main(root_dir, model_num = 1):
 
 
 # 当以脚本方式运行时，调用主函数
+# model_num =1： 直接读取并绘图； model_num =2： 重新计算并绘图
 if __name__ == "__main__":
-    results = main(root_dir = "./exp_4", model_num=2)
+    results = main(root_dir = "./exp_6", model_num=2)

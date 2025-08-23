@@ -1,9 +1,12 @@
 import os
+os.environ['MPLBACKEND'] = 'Agg'
+
 import re
 import copy
 import pandas as pd
 import warnings
 import gc
+import numpy as np
 
 from itertools import product
 
@@ -12,6 +15,22 @@ from DML_2 import run_doubleml_plr_rf
 from EVAL_3 import evaluate_dml_results
 from VISUAL_4 import plot_relative_differences, plot_qq_distribution, plot_hist_distribution, plot_raw_indicators
 
+
+
+# 工具函数
+def _true_theta_bar(X, cfg):
+    d = X.shape[1]
+    hi = int(cfg.get('hetero_idx', 0)) % d
+    ii = int(cfg.get('interaction_idx', 0)) % d
+    base = float(cfg.get('true_effect', 1.0))
+    het  = float(cfg.get('heterogeneous', 0.0))
+    inter= float(cfg.get('interaction', 0.0))
+    theta_vec = base
+    if het > 0:
+        theta_vec = theta_vec + het * X[:, hi]
+    if inter > 0:
+        theta_vec = theta_vec + inter * X[:, ii]
+    return float(np.mean(theta_vec))
 
 
 # ------------------------ 单次运行函数 ------------------------
@@ -24,7 +43,11 @@ def run_single_setting(config_dict: dict, dgp_num: int = 0, n_samples: int = 800
     # 生成数据
     X, D, Y = generate_dgp(n=n_samples, d=d_dim, dgp_num=dgp_num, cfg=cfg, seed=seed)
     # 跑 DML 并返回字典结果
-    return run_doubleml_plr_rf(X, D, Y)
+
+    res = run_doubleml_plr_rf(X, D, Y)
+    res['true_theta_bar'] = _true_theta_bar(X, cfg)  # 当次样本真值
+    return res
+
 
 # ------------------------ 实验配置函数  configuration function ------------------------
 def get_experiment_configs():
@@ -56,7 +79,7 @@ def get_experiment_configs():
     }
 
     named_configs = [
-        ("0_基准", {}),# baseline
+        ("0_base", {}),# baseline
         # ("1_非线性", {'nonlinearity': 1.0}),  # 加强 g(X) 的非线性项
         # ("2_交互", {'interaction': 0.5}),  # 加入 D·X 的交互项（强度 0.5）
         # ("3_稀疏性", {'sparse_k': 5}),  # 仅前 5 个 β 非零
@@ -110,20 +133,27 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
     for config in configs:
         estimates = []
         std_errors = []
+        run_true_bars = []
         for run in range(n_runs):
             try:
                 config_run = copy.deepcopy(config)
                 config_run['random_seed'] = config['random_seed'] + run
                 result = run_single_setting(config_run, dgp_num=dgp_num, n_samples=n_samples, d_dim=d_dim)
+
                 estimates.append(result['theta_hat'])
                 std_errors.append(result['se'])
+                run_true_bars.append(result['true_theta_bar'])
             except Exception as e:
                 print(f"配置 {config['config_name']} 第 {run} 次运行失败：{e}")
                 continue
 
-        metrics = evaluate_dml_results(estimates, std_errors, true_theta=config['true_effect'])
+        # metrics = evaluate_dml_results(estimates, std_errors, true_theta=config['true_effect'])
 
-        # ---- summary：保留config全量参数 + 全局维度 + 指标 ----
+        true_theta_cfg = float(np.mean(run_true_bars)) if run_true_bars else float(config['true_effect'])
+        # metrics = evaluate_dml_results(estimates, std_errors, true_theta=true_theta_cfg)
+        metrics = evaluate_dml_results(estimates, std_errors, true_theta=run_true_bars)
+
+        # summary：保留config全量参数 + 全局维度 + 指标
         summary = {k: v for k, v in config.items() if k != 'random_seed'}
         summary.update({
             'n_samples': n_samples,
@@ -131,17 +161,20 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
             'dgp_num': dgp_num,
             'n_runs': n_runs,
         })
+        summary['true_theta'] = true_theta_cfg
         summary.update(metrics)
         all_summary.append(summary)
 
         # all_estimates：逐run保存全量参数
         for run, (est, se) in enumerate(zip(estimates, std_errors)):
+            tbar = run_true_bars[run]  # 逐 run 的真实 θ̄
             row = {
                 'config_name': config['config_name'],
                 'theta_hat': est,
                 'se': se,
-                'true_effect': config['true_effect'],
-                'z': (est - config['true_effect']) / se if se not in (0, None) else float('nan'),
+                'true_effect': config['true_effect'], # 保留 true_effect 作为配置基线记录
+                'true_theta': tbar, # 真值
+                'z': (est - tbar) / se if se not in (0, None) else float('nan'),
                 'run_id': run,
                 'seed_used': config['random_seed'] + run,
                 # 全局维度
@@ -179,7 +212,7 @@ def run_experiments(configs, dgp_num: int = 0, n_samples: int = 800, d_dim: int 
         'config_name',
         'n_samples', 'd_dim', 'dgp_num', 'n_runs',
         'nonlinearity', 'interaction', 'sparse_k', 'skewness',
-        'heterogeneous', 'true_effect', 'noise_std',
+        'heterogeneous', 'true_effect', 'true_theta', 'noise_std',
         'rho', 's1', 'a0', 'a1', 'b0', 'b1',
         'interaction_idx', 'hetero_idx', 'bg_start', 'bg_end',
         'bias', 'rmse', 'variance', 'coverage_rate', 'rejection_rate', 'mean_estimate'
@@ -196,10 +229,15 @@ DGP_NUM = 2
 
 # 批量实验的默认参数网格
 DEFAULT_GRID = {
-    'N_SAMPLES': [50, 100, 200, 400, 800],
-    'D_DIM': [10, 20, 30], # 0,1结构需要>=3
+    # 'N_SAMPLES': [50, 100, 200, 400, 800],
+    # 'D_DIM': [10, 20, 30], # 0,1结构需要>=3
+    # 'DGP_NUM': [2, 3],
+    # 'N_RUNS': [100]
+
+    'N_SAMPLES': [50],
+    'D_DIM': [3, 5],  # 0,1结构需要>=3
     'DGP_NUM': [2, 3],
-    'N_RUNS': [100]
+    'N_RUNS': [5]
 }
 # 计算实验编号
 existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]
@@ -208,7 +246,7 @@ EXP_ID = max(existing) + 1 if existing else 1
 # 工具函数
 # 单次实验运行
 def run_one_experiment(n_samples: int, d_dim: int, dgp_num: int, n_runs: int,
-                       save_dir: str):
+                       save_dir: str, visual_num = 0):
     os.makedirs(save_dir, exist_ok=True)
     # 载入配置
     configs = get_experiment_configs()
@@ -221,28 +259,43 @@ def run_one_experiment(n_samples: int, d_dim: int, dgp_num: int, n_runs: int,
 
     # ================= 保存中间结果与配置 =================
     est_df = pd.DataFrame(all_estimates)
-    est_df['z'] = (est_df['theta_hat'] - est_df['true_effect']) / est_df['se']
+    # # 若旧记录无 true_theta 或 z，则补齐
+    # if 'true_theta' not in est_df.columns and {'theta_hat','se'}.issubset(est_df.columns):
+    #     warnings.warn("true_theta 缺失，无法正确标准化 z")
+    # if 'z' not in est_df.columns and {'theta_hat','se','true_theta'}.issubset(est_df.columns):
+    #     est_df['z'] = (est_df['theta_hat'] - est_df['true_theta']) / est_df['se']
+
     est_df.to_csv(os.path.join(save_dir, "dml_all_estimates.csv"), index=False)
 
-    cfg_df = pd.DataFrame(configs).copy()
+
+    cfg_df = pd.DataFrame(configs)
     cfg_df['n_samples'] = n_samples
     cfg_df['d_dim']     = d_dim
     cfg_df['dgp_num']   = dgp_num
     cfg_df['n_runs']    = n_runs
     cfg_df.to_csv(os.path.join(save_dir, "dml_configs.csv"), index=False)
     # =======================================================================
+    # 可视化
 
-    # 可视化（完全复用你现有的四个图）
-    plot_raw_indicators(df, save_dir)
-    plot_relative_differences(df, save_dir)
-    # plot_qq_distribution(all_estimates, save_dir)
-    # plot_hist_distribution(all_estimates, save_dir)
-    _ae_legacy = [(r['config_name'], r['theta_hat'], r['se'], r['true_effect']) for r in all_estimates]
-    plot_qq_distribution(_ae_legacy, save_dir)
-    plot_hist_distribution(_ae_legacy, save_dir)
+    if visual_num == 1:
+        # 可视化（四个图）
+        plot_raw_indicators(df, save_dir)
+        plot_relative_differences(df, save_dir)
+        # 转换为4元序列
+        _ae = [(r['config_name'], r['theta_hat'], r['se'], r['true_theta']) for r in all_estimates]
+        plot_qq_distribution(_ae, save_dir)
+        plot_hist_distribution(_ae, save_dir)
 
-    print(f"结果与图像已保存至：{save_dir}")
-    return df
+        print(f"结果与图像已保存至：{save_dir}")
+        return df
+
+    elif visual_num == 0:
+        print(f"结果已保存至：{save_dir}")
+        return df
+    else:
+        print(f"wrong visual_num")
+
+
 
 # ------------------------ 主函数：运行实验，保存结果并打印输出 ------------------------
 # -- main function: Run, save the results and print the output--
@@ -253,7 +306,7 @@ def main_single():
 
     run_one_experiment(
         n_samples=N_SAMPLES, d_dim=D_DIM, dgp_num=DGP_NUM, n_runs=N_RUNS,
-        save_dir=save_dir
+        save_dir=save_dir, visual_num = 0
     )
 
 def main_grid():
@@ -272,7 +325,7 @@ def main_grid():
         print(f"\n运行组合: N={n_samples}, d={d_dim}, dgp={dgp_num}, runs={n_runs}")
         run_one_experiment(
             n_samples=n_samples, d_dim=d_dim, dgp_num=dgp_num, n_runs=n_runs,
-            save_dir=subdir
+            save_dir=subdir, visual_num = 0 # visual_num = 1：可视化；0不可视化
         )
 
     print(f"\n全部批量实验完成。根目录：{root_dir}")

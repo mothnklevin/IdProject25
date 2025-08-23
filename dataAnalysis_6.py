@@ -70,19 +70,6 @@ def collect_and_merge_results(exp_folder: str):
     big = pd.concat(rows, ignore_index=True)
 
     # 3) 提取“参数配置编号 config_index”以便分组输出
-    # if "config_name" in big.columns:
-    #     idx_list, fallback = [], 0
-    #     for name in big["config_name"].astype(str).tolist():
-    #         m = RX_CFGIDX.match(name)
-    #         if m:
-    #             idx_list.append(int(m.group("idx")))
-    #         else:
-    #             idx_list.append(fallback)
-    #             fallback += 1
-    #     big["config_index"] = idx_list
-    # else:
-    #     big["config_name"]  = "unknown"
-    #     big["config_index"] = range(len(big))
     if "config_name" not in big.columns:
         big["config_name"] = "unknown"
 
@@ -95,7 +82,7 @@ def collect_and_merge_results(exp_folder: str):
         "config_index", "config_name",
         "n_samples", "d_dim", "dgp_num", "n_runs",
         "nonlinearity", "interaction", "sparse_k", "skewness",
-        "heterogeneous", "true_effect", "noise_std",
+        "heterogeneous", "true_effect", "true_theta", "noise_std",
         "bias", "rmse", "variance", "coverage_rate", "rejection_rate", "mean_estimate",
     ]
     big_out = big.drop(columns=["source_file"], errors="ignore").copy()
@@ -227,29 +214,17 @@ if __name__ == "__main__":
     choose_num = 2
     if choose_num ==1:
         # 指定要处理的实验文件夹（示例："./exp_2"）
-        collect_and_merge_results("./exp_3")
+        collect_and_merge_results("./exp_6")
     elif choose_num == 2:
-        agg_file = "./exp_2/DataAnalysis/all_results.csv"
+        agg_file = "./exp_6/DataAnalysis/all_results.csv"
         if os.path.exists(agg_file):
             filter_and_plot(
                 agg_file,
-                out_dir="./exp_2/DataAnalysis/n100_200_g2",
-                n_samples=[100, 200],
+                out_dir="./exp_6/DataAnalysis/n100_200_g2",
+                n_samples=[50],
                 dgp_num=2,
             )
         else:
             print("找不到示例文件，请先运行汇总步骤。")
     else:
         print("choose_num无效")
-
-    # agg_file = "./exp_1/DataAnalysis/agg_config0_0_基准.csv"
-    # if os.path.exists(agg_file):
-    #     filter_and_plot(
-    #         agg_file,
-    #         out_dir="./exp_1/DataAnalysis/config0_",
-    #         n_samples=[200],
-    #         dgp_num=2,
-    #         # d_dim=10,
-    #     )
-    # else:
-    #     print("找不到示例文件，请先运行汇总步骤。")
