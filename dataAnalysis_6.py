@@ -123,11 +123,112 @@ def get_columns_from_agg(agg_csv_path: str):
     return [c for c in df.columns if c not in ("config_index", "source_file")]
 
 
-def filter_and_plot(agg_csv_path: str, out_dir: str, **filters):
+# def filter_and_plot(agg_csv_path: str, out_dir: str, **filters):
+#     df = pd.read_csv(agg_csv_path)
+#     os.makedirs(out_dir, exist_ok=True)
+#
+#     # 过滤
+#     used_keys = []
+#     for key, val in filters.items():
+#         if key in df.columns and val is not None:
+#             if not isinstance(val, (list, tuple, set)):
+#                 val = [val]
+#             df = df[df[key].isin(list(val))]
+#             used_keys.append(key)
+#     if not used_keys:
+#         raise ValueError("必须至少指定一个 DML 参数用于筛选（例如 n_samples=[100,200], dgp_num=1）。")
+#     if df.empty:
+#         print("筛选后无数据")
+#         return
+#
+#     # 未指定参数 = 用作分组
+#     unspecified = [c for c in DML_PARAM_COLS if c in df.columns and c not in used_keys]
+#     # 仅保留在当前数据中实际“有差异”的列
+#     unspecified = [c for c in unspecified if df[c].nunique(dropna=False) > 1]
+#     # 只取前 2 个（严格顺序）
+#     unspecified = sorted(unspecified, key=lambda c: PARAM_ORDER.index(c))[:2]
+#
+#     # 3) 生成 x 轴标签（并对重复组合做均值聚合，稳健处理）
+#     if len(unspecified) == 0:
+#         df["__label__"] = "all"
+#         grouped = df.groupby("__label__", as_index=False).mean(numeric_only=True)
+#         title_suffix = "all specified"
+#         label_cols = []
+#     elif len(unspecified) == 1:
+#         col = unspecified[0]
+#         df["__label__"] = df[col].astype(str)
+#         grouped = df.groupby("__label__", as_index=False).mean(numeric_only=True)
+#         title_suffix = col
+#         label_cols = [col]
+#     else:
+#         col1, col2 = unspecified[0], unspecified[1]
+#         # 严格 col1 在前，col2 在后
+#         df["__label__"] = df[[col1, col2]].astype(str).agg(",".join, axis=1)
+#         grouped = df.groupby("__label__", as_index=False).mean(numeric_only=True)
+#         title_suffix = f"{col1} + {col2}"
+#         label_cols = [col1, col2]
+#
+#     # 4) 逐指标绘制柱状图（纵轴=数值；柱顶标注）
+#     for metric in METRIC_COLS:
+#         if metric not in grouped.columns:
+#             continue
+#
+#         x_labels = grouped["__label__"].tolist()
+#         y_vals = grouped[metric].values
+#
+#         plt.figure(figsize=(8, 5))
+#         bars = plt.bar(x_labels, y_vals)
+#
+#         # 柱顶标注具体数值
+#         for b, v in zip(bars, y_vals):
+#             plt.text(b.get_x() + b.get_width() / 2, v,
+#                      f"{v:.3f}", ha="center",
+#                      va="bottom" if v >= 0 else "top", fontsize=9)
+#
+#         # 组装标题：config_name（若有） + ' — ' + 差异参数标题
+#
+#         full_title = title_suffix
+#
+#         plt.title(full_title)
+#         plt.xlabel(" , ".join(label_cols) if label_cols else "")
+#         plt.ylabel(metric)
+#         plt.xticks(rotation=0)
+#
+#         # 输出文件名：metric + 标题安全化
+#         safe_suffix = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", title_suffix) if title_suffix else "all"
+#         base = os.path.splitext(os.path.basename(agg_csv_path))[0]
+#
+#         # out_file = os.path.join(out_dir, f"{base}__{metric}__{safe_suffix}.png")
+#         if unspecified:
+#             suffix = "+".join(unspecified)
+#             out_file = os.path.join(out_dir, f"{metric}__{suffix}.png")
+#         else:
+#             out_file = os.path.join(out_dir, f"{metric}.png")
+#
+#         plt.tight_layout()
+#         plt.savefig(out_file)
+#         plt.close()
+#         print(f"[Plot] {out_file}")
+
+def filter_and_plot(agg_csv_path: str, out_dir: str, factor: str | None = None, **filters):
+    """
+    单因素扰动可视化：
+    - 先用 **filters** 固定住 DGP 结构参数与除 factor 外的 DML 参数；
+    - 指定 factor（例如 'interaction'），在 x 轴按 n_samples 展开，
+      每个 factor 水平绘制一组（分系列）——便于观察单因素随样本量变化的性能曲线/柱状图。
+    - 若未提供 factor，则保持原先的自动分组（最多两个未指定参数作为标签）。
+    """
+    import numpy as np
+
     df = pd.read_csv(agg_csv_path)
     os.makedirs(out_dir, exist_ok=True)
 
-    # 过滤
+    # 0) 校验 factor 是否有效
+    if factor is not None and factor not in df.columns:
+        print(f"[警告] 指定的 factor='{factor}' 不在数据列中，将回退为原自动分组逻辑。")
+        factor = None
+
+    # 1) 过滤：用 filters 固定其他参数
     used_keys = []
     for key, val in filters.items():
         if key in df.columns and val is not None:
@@ -135,20 +236,69 @@ def filter_and_plot(agg_csv_path: str, out_dir: str, **filters):
                 val = [val]
             df = df[df[key].isin(list(val))]
             used_keys.append(key)
-    if not used_keys:
-        raise ValueError("必须至少指定一个 DML 参数用于筛选（例如 n_samples=[100,200], dgp_num=1）。")
+    if not used_keys and factor is None:
+        raise ValueError("必须至少指定一个 DML 参数用于筛选（例如 n_samples=[100,200], dgp_num=2）。")
     if df.empty:
         print("筛选后无数据")
         return
 
-    # 未指定参数 = 用作分组
+    # ====== 模式A：单因素扰动（推荐） ======
+    if factor is not None:
+        # 要求 factor 在局部数据中至少有2个水平，n_samples 也应至少1个
+        if df[factor].nunique(dropna=False) <= 1:
+            print(f"[提示] factor='{factor}' 在筛选后仅有一个水平，改用原自动分组逻辑。")
+            factor = None
+        elif 'n_samples' not in df.columns:
+            print("[提示] 数据中不存在 n_samples 列，改用原自动分组逻辑。")
+            factor = None
+
+    if factor is not None:
+        # 只保留绘图需要的列
+        keep_cols = ['n_samples', factor] + [c for c in METRIC_COLS if c in df.columns]
+        df = df[keep_cols].copy()
+
+        # 聚合：相同 (n_samples, factor) 取均值（多次重复/多配置稳健处理）
+        grp = df.groupby(['n_samples', factor], as_index=False).mean(numeric_only=True)
+
+        # 生成 x 轴与系列
+        x_vals = sorted(grp['n_samples'].unique())
+        levels = sorted(grp[factor].unique(), key=lambda v: (isinstance(v, str), v))
+
+        for metric in METRIC_COLS:
+            if metric not in grp.columns:
+                continue
+            plt.figure(figsize=(9, 5))
+            # 分系列柱状：每个 factor 水平一组
+            width = 0.8 / max(1, len(levels))
+            x_idx = np.arange(len(x_vals))
+
+            for i, lev in enumerate(levels):
+                gi = grp[grp[factor] == lev].set_index('n_samples').reindex(x_vals)
+                y = gi[metric].to_numpy()
+                plt.bar(x_idx + i*width, y, width=width, label=f"{factor}={lev}")
+                # 数值标注
+                for xi, yi in zip(x_idx + i*width, y):
+                    if pd.notna(yi):
+                        plt.text(xi, yi, f"{yi:.3f}", ha='center', va='bottom' if yi>=0 else 'top', fontsize=8)
+
+            plt.xticks(x_idx + (len(levels)-1)*width/2, [str(x) for x in x_vals])
+            plt.xlabel('n_samples')
+            plt.ylabel(metric)
+            plt.title(f"Single-factor: {factor}  @ fixed filters")
+            plt.legend(frameon=False, fontsize=9)
+            plt.tight_layout()
+
+            out_file = os.path.join(out_dir, f"{metric}__by_n__factor_{factor}.png")
+            plt.savefig(out_file)
+            plt.close()
+            print(f"[Plot] {out_file}")
+        return
+
+    # ====== 模式B：原自动分组（最多取两个未指定参数） ======
     unspecified = [c for c in DML_PARAM_COLS if c in df.columns and c not in used_keys]
-    # 仅保留在当前数据中实际“有差异”的列
     unspecified = [c for c in unspecified if df[c].nunique(dropna=False) > 1]
-    # 只取前 2 个（严格顺序）
     unspecified = sorted(unspecified, key=lambda c: PARAM_ORDER.index(c))[:2]
 
-    # 3) 生成 x 轴标签（并对重复组合做均值聚合，稳健处理）
     if len(unspecified) == 0:
         df["__label__"] = "all"
         grouped = df.groupby("__label__", as_index=False).mean(numeric_only=True)
@@ -162,67 +312,52 @@ def filter_and_plot(agg_csv_path: str, out_dir: str, **filters):
         label_cols = [col]
     else:
         col1, col2 = unspecified[0], unspecified[1]
-        # 严格 col1 在前，col2 在后
         df["__label__"] = df[[col1, col2]].astype(str).agg(",".join, axis=1)
         grouped = df.groupby("__label__", as_index=False).mean(numeric_only=True)
         title_suffix = f"{col1} + {col2}"
         label_cols = [col1, col2]
 
-    # 4) 逐指标绘制柱状图（纵轴=数值；柱顶标注）
     for metric in METRIC_COLS:
         if metric not in grouped.columns:
             continue
-
         x_labels = grouped["__label__"].tolist()
         y_vals = grouped[metric].values
-
         plt.figure(figsize=(8, 5))
         bars = plt.bar(x_labels, y_vals)
-
-        # 柱顶标注具体数值
         for b, v in zip(bars, y_vals):
             plt.text(b.get_x() + b.get_width() / 2, v,
                      f"{v:.3f}", ha="center",
                      va="bottom" if v >= 0 else "top", fontsize=9)
-
-        # 组装标题：config_name（若有） + ' — ' + 差异参数标题
-
-        full_title = title_suffix
-
-        plt.title(full_title)
+        plt.title(title_suffix)
         plt.xlabel(" , ".join(label_cols) if label_cols else "")
         plt.ylabel(metric)
         plt.xticks(rotation=0)
-
-        # 输出文件名：metric + 标题安全化
-        safe_suffix = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", title_suffix) if title_suffix else "all"
-        base = os.path.splitext(os.path.basename(agg_csv_path))[0]
-
-        # out_file = os.path.join(out_dir, f"{base}__{metric}__{safe_suffix}.png")
         if unspecified:
             suffix = "+".join(unspecified)
             out_file = os.path.join(out_dir, f"{metric}__{suffix}.png")
         else:
             out_file = os.path.join(out_dir, f"{metric}.png")
-
         plt.tight_layout()
         plt.savefig(out_file)
         plt.close()
         print(f"[Plot] {out_file}")
 
 if __name__ == "__main__":
+    root_dir = "./exp_4"
     choose_num = 2
     if choose_num ==1:
-        # 指定要处理的实验文件夹（示例："./exp_2"）
-        collect_and_merge_results("./exp_6")
+        collect_and_merge_results(root_dir)
     elif choose_num == 2:
-        agg_file = "./exp_6/DataAnalysis/all_results.csv"
+        agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
         if os.path.exists(agg_file):
+            out_dir = os.path.join(root_dir, "DataAnalysis", "g2d10_noise_std")
             filter_and_plot(
                 agg_file,
-                out_dir="./exp_6/DataAnalysis/n100_200_g2",
-                n_samples=[50],
+                out_dir=out_dir,
+                factor='noise_std',
+                n_samples=[50,100,200,400,800],
                 dgp_num=2,
+                d_dim=10,
             )
         else:
             print("找不到示例文件，请先运行汇总步骤。")
