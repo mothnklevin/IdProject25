@@ -24,7 +24,8 @@ def evaluate_dml_results(estimates: list, standard_errors: list, true_theta=1.0)
 
     # 5拒绝率：估计是否具有显著性（|t| > z）
     # 用于评估倾向分数偏态
-    rejection_rate = np.mean(np.abs(estimates / se) > z)
+    # rejection_rate = np.mean(np.abs(estimates / se) > z)
+    rejection_rate = np.mean(np.abs((estimates - true_theta) / se) > z)
 
     # 6平均估计值：辅助解释偏差与显著性表现
     mean_estimate = np.mean(estimates)

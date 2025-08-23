@@ -1,11 +1,12 @@
 import numpy as np
 import math
-
+import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from collections import defaultdict
 
+from EVAL_3 import evaluate_dml_results
 import warnings
 # 忽略警告信息，保持输出整洁
 warnings.filterwarnings('ignore')
@@ -182,35 +183,166 @@ def plot_hist_distribution(all_estimates, save_dir, bins=12):
     plt.close()
 
 import pandas as pd
-def main():
-    # ======== 1. 设置实验结果目录 ========
-    save_dir = "./exp_7"
 
-    # ======== 2. 读取已保存的 CSV ========
-    df = pd.read_csv(os.path.join(save_dir, "dml_experiment_summary.csv"))
-    est_df = pd.read_csv(os.path.join(save_dir, "dml_all_estimates.csv"))
-    # 转成 [(cfg, theta, se, true_effect), ...] 列表
-    all_estimates = list(zip(
-        est_df['config_name'],
-        est_df['theta_hat'],
-        est_df['se'],
-        est_df['true_effect']
-    ))
+# def main():
+#     # ======== 1. 设置实验结果目录 ========
+#     save_dir = "./exp_7"
+#
+#     # ======== 2. 读取已保存的 CSV ========
+#     df = pd.read_csv(os.path.join(save_dir, "dml_experiment_summary.csv"))
+#     est_df = pd.read_csv(os.path.join(save_dir, "dml_all_estimates.csv"))
+#     # 转成 [(cfg, theta, se, true_effect), ...] 列表
+#     all_estimates = list(zip(
+#         est_df['config_name'],
+#         est_df['theta_hat'],
+#         est_df['se'],
+#         est_df['true_effect']
+#     ))
+#
+#     # 完整配置表（此处暂时不直接用于作图，但可用作检查）
+#     cfg_df = pd.read_csv(os.path.join(save_dir, "dml_configs.csv"))
+#     print("Loaded configs:")
+#     print(cfg_df.head())
+#
+#     # ======== 3. 调用已有的可视化函数 ========
+#     plot_raw_indicators(df, save_dir) # 指标原始图像
+#     plot_relative_differences(df, save_dir)  # 相对基准变化
+#     plot_qq_distribution(all_estimates, save_dir)  # QQ 图
+#     plot_hist_distribution(all_estimates, save_dir)  # z 值直方图
+#
+#
+#     print(f"复现图像已保存到: {save_dir}")
 
-    # 完整配置表（此处暂时不直接用于作图，但可用作检查）
-    cfg_df = pd.read_csv(os.path.join(save_dir, "dml_configs.csv"))
-    print("Loaded configs:")
-    print(cfg_df.head())
+def main(root_dir, model_num = 1):
+    # 设定实验根目录
+    # root_dir = "./exp_4"
+    print("model_num = ", model_num)
 
-    # ======== 3. 调用已有的可视化函数 ========
-    plot_raw_indicators(df, save_dir) # 指标原始图像
-    plot_relative_differences(df, save_dir)  # 相对基准变化
-    plot_qq_distribution(all_estimates, save_dir)  # QQ 图
-    plot_hist_distribution(all_estimates, save_dir)  # z 值直方图
+    # 1) 收集需要处理的目标目录
+    targets = []
+    # 情况A：根目录本身就有CSV（老结构）
+    if os.path.exists(os.path.join(root_dir, "dml_experiment_summary.csv")):
+        print(f"目录 {root_dir} 未清理所有CSV文件。")
+        return
+    else:
+        # 情况B：新结构，遍历子文件夹
+        if not os.path.isdir(root_dir):
+            print(f"未找到目录：{root_dir}")
+            return
+        for name in sorted(os.listdir(root_dir)):
+            sub = os.path.join(root_dir, name)
+            if not os.path.isdir(sub):
+                continue
+            has_summary = os.path.exists(os.path.join(sub, "dml_experiment_summary.csv"))
+            has_est = os.path.exists(os.path.join(sub, "dml_all_estimates.csv"))
+            if has_summary and has_est:
+                targets.append(sub)
+
+    if not targets:
+        print(f"在 {root_dir} 下未找到任何包含结果CSV的目录。")
+        return
+
+    if model_num == 1:
+        # 2) 逐目录读取并作图
+        for save_dir in targets:
+            print(f"\n[可视化] 处理目录：{save_dir}")
+            df = pd.read_csv(os.path.join(save_dir, "dml_experiment_summary.csv"))
+            est_df = pd.read_csv(os.path.join(save_dir, "dml_all_estimates.csv"))
+
+            all_estimates = list(zip(
+                est_df['config_name'],
+                est_df['theta_hat'],
+                est_df['se'],
+                est_df['true_effect']
+            ))
+
+            cfg_path = os.path.join(save_dir, "dml_configs.csv")
+            if os.path.exists(cfg_path):
+                cfg_df = pd.read_csv(cfg_path)
+                print("Loaded configs (head):")
+                print(cfg_df.head())
+            else:
+                print("提示：未发现 dml_configs.csv（不影响绘图）。")
+
+            # 调用现有的四个可视化函数（输出仍保存在各自子目录）
+            plot_raw_indicators(df, save_dir)
+            plot_relative_differences(df, save_dir)
+            plot_qq_distribution(all_estimates, save_dir)
+            plot_hist_distribution(all_estimates, save_dir)
+
+            print(f"图像已保存到: {save_dir}")
+    elif model_num == 2:
+        for save_dir in targets:
+            print(f"\n[可视化] 处理目录：{save_dir}")
+
+            # 2.1 读取逐 run 结果（all_estimates）
+            est_path = os.path.join(save_dir, "dml_all_estimates.csv")
+            est_df = pd.read_csv(est_path)
+
+            # 2.2 动态识别参数列（排除逐次/中间列，其余视为参数常量列）
+            exclude_cols = {
+                'config_name', 'theta_hat', 'se', 'true_effect', 'z',
+                'run_id', 'seed_used'
+            }
+            param_cols = [c for c in est_df.columns if c not in exclude_cols]
+
+            # 2.3 以 config_name 分组重算 summary
+            rows = []
+            for cfg, g in est_df.groupby('config_name', sort=False):
+                estimates = g['theta_hat'].to_numpy()
+                se = g['se'].to_numpy()
+
+                te_vals = g['true_effect'].unique()
+                if len(te_vals) != 1:
+                    raise ValueError(f"{cfg} 的 true_effect 非唯一: {te_vals}")
+                true_theta = float(te_vals[0])
+
+                metrics = evaluate_dml_results(estimates, se, true_theta=true_theta)
+
+                # 组内参数常量：取第一行
+                first = g.iloc[0]
+                row = {'config_name': cfg}
+                for c in param_cols:
+                    row[c] = first[c] if c in g.columns else None
+                row.update(metrics)
+                rows.append(row)
+
+            df = pd.DataFrame(rows)
+
+            # 2.4 覆盖写回新的 summary（供 Raw/Relative 作图使用）
+            sum_path = os.path.join(save_dir, "dml_experiment_summary.csv")
+            df.to_csv(sum_path, index=False)
+
+            # 2.5 可选：读取完整配置（如存在，仅打印头部）
+            cfg_path = os.path.join(save_dir, "dml_configs.csv")
+            if os.path.exists(cfg_path):
+                cfg_df = pd.read_csv(cfg_path)
+                print("Loaded configs (head):")
+                print(cfg_df.head())
+            else:
+                print("提示：未发现 dml_configs.csv（不影响绘图）。")
+
+            # 2.6 构造 all_estimates（用于 QQ / 直方图）
+            all_estimates = list(zip(
+                est_df['config_name'],
+                est_df['theta_hat'],
+                est_df['se'],
+                est_df['true_effect']
+            ))
+
+            # 2.7 调用现有的四个可视化函数（输出仍保存在各自子目录）
+            plot_raw_indicators(df, save_dir)  # 基于新 summary
+            plot_relative_differences(df, save_dir)  # 基于新 summary
+            plot_qq_distribution(all_estimates, save_dir)  # 基于逐 run 动态 z
+            plot_hist_distribution(all_estimates, save_dir)
+
+            print(f"图像已保存到: {save_dir}")
+    else:
+        print(" wrong model_num ")
 
 
-    print(f"复现图像已保存到: {save_dir}")
+
 
 # 当以脚本方式运行时，调用主函数
 if __name__ == "__main__":
-    results = main()
+    results = main(root_dir = "./exp_4", model_num=2)

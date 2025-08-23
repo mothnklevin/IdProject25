@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import lru_cache
 
 import numpy as np
 from scipy.special import expit
@@ -7,6 +8,11 @@ from typing import Dict, Any
 
 from doubleml.datasets import make_plr_CCDDHNR2018
 
+# 工具函数
+def _get_cholesky_toeplitz(d: int, rho: float):
+    first_col = (rho ** np.arange(d))
+    Sigma = toeplitz(first_col)
+    return np.linalg.cholesky(Sigma)
 
 # -------------------- 默认参数（统一且数值化） --------------------
 DEFAULTS: Dict[str, Any] = {
@@ -86,10 +92,13 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
         X = rng.standard_normal(size=(n, d))          # X ~ N(0, I)
 
     elif dgp_num == 2:                                 # 结构2：Toeplitz 相关正态，doubleML给出了明确结构
-        first_col = (C['rho'] ** np.arange(d))        # Toeplitz 第一列：rho^{|j|}
-        Sigma = toeplitz(first_col)                   # 构造协方差矩阵 Σ
-        L = np.linalg.cholesky(Sigma)                 # Cholesky 分解：Σ = L L^T
-        X = rng.standard_normal(size=(n, d)) @ L.T    # 生成相关正态：Z L^T
+        # first_col = (C['rho'] ** np.arange(d))        # Toeplitz 第一列：rho^{|j|}
+        # Sigma = toeplitz(first_col)                   # 构造协方差矩阵 Σ
+        # L = np.linalg.cholesky(Sigma)                 # Cholesky 分解：Σ = L L^T
+        # X = rng.standard_normal(size=(n, d)) @ L.T    # 生成相关正态：Z L^T
+        L = _get_cholesky_toeplitz(d, float(C['rho']))  # 读取缓存结果
+        X = rng.standard_normal(size=(n, d)) @ L.T
+
     elif dgp_num == 3:
         np.random.seed(seed)
 
@@ -103,6 +112,16 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
             s1=C['s1'], s2=C['noise_std'],
             return_type='array'
         )
+
+        # 添加支持异质性 θ(x) 与交互，
+        if C['heterogeneous'] > 0:
+            idx = int(C['hetero_idx']) % X.shape[1]
+            Y = Y + C['heterogeneous'] * D * X[:, idx]  # 等价于 θ(x)=α + h·X_idx
+
+        if C['interaction'] > 0:
+            idx = int(C['interaction_idx']) % X.shape[1]
+            Y = Y + C['interaction'] * D * X[:, idx]  # 额外的 D·X 交互项
+
         # 与现有接口保持一致：返回 (X, D, Y)
         return X, D, Y
     else:
