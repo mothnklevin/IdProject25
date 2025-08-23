@@ -111,6 +111,16 @@ def get_experiment_configs():
         ("s1_1.0", {'s1': 1.0}),  # 同基线
         ("s1_2.0", {'s1': 2.0}),
 
+        # 间接-非线性：放大 sigmoid 项、压线性项（D 与 Y 两侧）
+        ("ind_nl_mD",   {'a0': 0.0, 'a1': 2.0}),             # D 更非线性
+        ("ind_nl_mY",   {'b0': 2.0, 'b1': 0.0}),             # Y 的 g(X) 更非线性
+        ("ind_nl_both", {'a0': 0.0, 'a1': 2.0, 'b0': 2.0, 'b1': 0.0}),
+
+        # 间接-偏态：降低 s1 让 m0(X) 主导；放大 b0 让 g(X) 非对称更明显
+        ("ind_skew_Dpos",  {'a0': 0.0, 'a1': 4.0, 's1': 0.2}),   # D 正偏（由 sigmoid 主导）
+        ("ind_skew_Dneg",  {'a0': 0.0, 'a1': -4.0, 's1': 0.2}),  # D 负偏
+        ("ind_skew_Y",     {'b0': 4.0, 'b1': 0.0, 'noise_std': 0.5}),  # Y 系统项更偏
+
     ]
 
     merged_configs = []
@@ -229,15 +239,15 @@ DGP_NUM = 2
 
 # 批量实验的默认参数网格
 DEFAULT_GRID = {
-    # 'N_SAMPLES': [50, 100, 200, 400, 800],
-    # 'D_DIM': [10, 20, 30], # 0,1结构需要>=3
-    # 'DGP_NUM': [2, 3],
-    # 'N_RUNS': [100]
-
-    'N_SAMPLES': [50],
-    'D_DIM': [3, 5],  # 0,1结构需要>=3
+    'N_SAMPLES': [50, 100, 200, 400, 800],
+    'D_DIM': [3, 5, 10, 20, 30], # 0,1结构需要>=3
     'DGP_NUM': [2, 3],
-    'N_RUNS': [5]
+    'N_RUNS': [100]
+
+    # 'N_SAMPLES': [50],
+    # 'D_DIM': [3, 5],  # 0,1结构需要>=3
+    # 'DGP_NUM': [2, 3],
+    # 'N_RUNS': [5]
 }
 # 计算实验编号
 existing = [int(re.findall(r'exp_(\d+)', d)[0]) for d in os.listdir('.') if re.match(r'exp_\d+', d)]

@@ -350,14 +350,20 @@ if __name__ == "__main__":
     elif choose_num == 2:
         agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
         if os.path.exists(agg_file):
-            out_dir = os.path.join(root_dir, "DataAnalysis", "g2d10_noise_std")
+            # preferred_cols = [
+            #     "config_name",
+            #     "n_samples", "d_dim", "dgp_num", "n_runs",
+            #     "nonlinearity", "interaction", "sparse_k", "skewness","heterogeneous", "noise_std",
+            #     'rho' , 's1' , 'a0' , 'a1' , 'b0' , 'b1' ,
+            # ]
+            out_dir = os.path.join(root_dir, "DataAnalysis", "g2d30_noise_std")
             filter_and_plot(
                 agg_file,
                 out_dir=out_dir,
                 factor='noise_std',
                 n_samples=[50,100,200,400,800],
                 dgp_num=2,
-                d_dim=10,
+                d_dim=30,
             )
         else:
             print("找不到示例文件，请先运行汇总步骤。")
