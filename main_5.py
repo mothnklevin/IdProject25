@@ -240,7 +240,7 @@ DGP_NUM = 2
 # 批量实验的默认参数网格
 DEFAULT_GRID = {
     'N_SAMPLES': [50, 100, 200, 400, 800],
-    'D_DIM': [3, 5, 10, 20, 30], # 0,1结构需要>=3
+    'D_DIM': [3, 5, 10, 20, 30, 50, 100], # 0,1结构需要>=3
     'DGP_NUM': [2, 3],
     'N_RUNS': [100]
 
@@ -269,12 +269,6 @@ def run_one_experiment(n_samples: int, d_dim: int, dgp_num: int, n_runs: int,
 
     # ================= 保存中间结果与配置 =================
     est_df = pd.DataFrame(all_estimates)
-    # # 若旧记录无 true_theta 或 z，则补齐
-    # if 'true_theta' not in est_df.columns and {'theta_hat','se'}.issubset(est_df.columns):
-    #     warnings.warn("true_theta 缺失，无法正确标准化 z")
-    # if 'z' not in est_df.columns and {'theta_hat','se','true_theta'}.issubset(est_df.columns):
-    #     est_df['z'] = (est_df['theta_hat'] - est_df['true_theta']) / est_df['se']
-
     est_df.to_csv(os.path.join(save_dir, "dml_all_estimates.csv"), index=False)
 
 

@@ -2,6 +2,7 @@ import numpy as np
 import math
 import pandas as pd
 import os
+import re
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from collections import defaultdict
@@ -182,36 +183,92 @@ def plot_hist_distribution(all_estimates, save_dir, bins=12):
     plt.savefig(os.path.join(save_dir, "Histograms_by_Config.png"))
     plt.close()
 
-import pandas as pd
 
-# def main():
-#     # ======== 1. 设置实验结果目录 ========
-#     save_dir = "./exp_7"
-#
-#     # ======== 2. 读取已保存的 CSV ========
-#     df = pd.read_csv(os.path.join(save_dir, "dml_experiment_summary.csv"))
-#     est_df = pd.read_csv(os.path.join(save_dir, "dml_all_estimates.csv"))
-#     # 转成 [(cfg, theta, se, true_effect), ...] 列表
-#     all_estimates = list(zip(
-#         est_df['config_name'],
-#         est_df['theta_hat'],
-#         est_df['se'],
-#         est_df['true_effect']
-#     ))
-#
-#     # 完整配置表（此处暂时不直接用于作图，但可用作检查）
-#     cfg_df = pd.read_csv(os.path.join(save_dir, "dml_configs.csv"))
-#     print("Loaded configs:")
-#     print(cfg_df.head())
-#
-#     # ======== 3. 调用已有的可视化函数 ========
-#     plot_raw_indicators(df, save_dir) # 指标原始图像
-#     plot_relative_differences(df, save_dir)  # 相对基准变化
-#     plot_qq_distribution(all_estimates, save_dir)  # QQ 图
-#     plot_hist_distribution(all_estimates, save_dir)  # z 值直方图
-#
-#
-#     print(f"复现图像已保存到: {save_dir}")
+def plot_normality_reject_rate_curve(
+    df_rates: pd.DataFrame,
+    out_dir: str,
+    facet_by: list = ['config_name'],
+    x: str = 'n_samples',
+    ys: tuple = ('reject_rate_shapiro', 'reject_rate_ad', 'reject_rate_both')
+):
+
+    # 绘制正态性拒绝率曲线（Shapiro / AD / Both）。
+    # - df_rates: 由 _6 计算得到的聚合结果，每行对应一个分组在某个 n_samples 下的拒绝率
+    #   预期包含列：x（默认 n_samples）、ys（默认三个拒绝率列）以及 facet_by 指定的列
+    # - out_dir: 输出目录（通常为 exp_i/DataAnalysis/）
+    # - facet_by: 分面字段列表；每个唯一组合生成一张图（默认每个 config_name 一张）
+    # - x: 横轴（样本量）；会尝试按数值排序
+    # - ys: 要绘制的 y 列名元组
+
+    # 基本检查
+    if df_rates is None or df_rates.empty:
+        print("[plot_normality_reject_rate_curve] 输入为空，跳过绘图。")
+        return
+
+    for col in [x, *ys, *facet_by]:
+        if col not in df_rates.columns:
+            print(f"[plot_normality_reject_rate_curve] 缺少必要列：{col}，跳过绘图。")
+            return
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    # 统一处理：将 x 转为数值便于排序（容忍无法转换的值）
+    def _to_numeric_safe(s):
+        try:
+            return pd.to_numeric(s, errors='coerce')
+        except Exception:
+            return s
+
+    df = df_rates.copy()
+    df[x] = _to_numeric_safe(df[x])
+
+    # 若 facet_by 为空或无效，则退化为单图
+    if not facet_by:
+        facet_by = []
+
+    # 分面分组
+    if facet_by:
+        groups = df.groupby(facet_by, dropna=False, sort=False)
+    else:
+        # 统一成可迭代接口
+        groups = [((), df)]
+
+    for facet_vals, g in groups:
+        # 排序
+        g_sorted = g.sort_values(by=x, kind='mergesort')
+        xs = g_sorted[x].values
+
+        # 建图
+        plt.figure(figsize=(7.5, 5))
+        for y_col in ys:
+            if y_col in g_sorted.columns:
+                plt.plot(xs, g_sorted[y_col].values, marker='o', label=y_col)
+
+        plt.ylim(0, 1)
+        plt.xlabel(x)
+        plt.ylabel("Reject Rate")
+        # 标题与文件名后缀
+        if facet_by:
+            kv = [f"{k}={v}" for k, v in zip(facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,)))]
+            title_suffix = " | ".join(kv)
+            fname_suffix = "__" + "_".join([f"{k}-{str(v)}" for k, v in zip(facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,)))])
+        else:
+            title_suffix = "all"
+            fname_suffix = "__all"
+
+        plt.title(f"Normality Reject Rate Curves ({title_suffix})")
+        plt.grid(alpha=0.25)
+        plt.legend(frameon=False, fontsize=9)
+        plt.tight_layout()
+
+        safe_name = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", fname_suffix)
+        out_path = os.path.join(out_dir, f"NormalityRejectCurve{safe_name}.png")
+        plt.savefig(out_path)
+        plt.close()
+        print(f"[Plot] {out_path}")
+
+
+
 
 def main(root_dir, model_num = 1):
     # 设定实验根目录
@@ -345,4 +402,4 @@ def main(root_dir, model_num = 1):
 # 当以脚本方式运行时，调用主函数
 # model_num =1： 直接读取并绘图； model_num =2： 重新计算并绘图
 if __name__ == "__main__":
-    results = main(root_dir = "./exp_6", model_num=2)
+    results = main(root_dir = "./exp_5", model_num=1)
