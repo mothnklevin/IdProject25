@@ -200,19 +200,19 @@ def plot_normality_reject_rate_curve(
     # - x: 横轴（样本量）；会尝试按数值排序
     # - ys: 要绘制的 y 列名元组
 
-    # 基本检查
+    # -------- 基本检查 --------
     if df_rates is None or df_rates.empty:
         print("[plot_normality_reject_rate_curve] 输入为空，跳过绘图。")
         return
 
-    for col in [x, *ys, *facet_by]:
+    for col in [x, *ys, *(facet_by or [])]:
         if col not in df_rates.columns:
             print(f"[plot_normality_reject_rate_curve] 缺少必要列：{col}，跳过绘图。")
             return
 
     os.makedirs(out_dir, exist_ok=True)
 
-    # 统一处理：将 x 转为数值便于排序（容忍无法转换的值）
+    # 将 x 尽量转为数值；失败则保留原值（但后续仍按字符串显示）
     def _to_numeric_safe(s):
         try:
             return pd.to_numeric(s, errors='coerce')
@@ -222,48 +222,95 @@ def plot_normality_reject_rate_curve(
     df = df_rates.copy()
     df[x] = _to_numeric_safe(df[x])
 
-    # 若 facet_by 为空或无效，则退化为单图
+    # 若不分面，构造单组
     if not facet_by:
-        facet_by = []
-
-    # 分面分组
-    if facet_by:
-        groups = df.groupby(facet_by, dropna=False, sort=False)
-    else:
-        # 统一成可迭代接口
         groups = [((), df)]
+    else:
+        groups = df.groupby(facet_by, dropna=False, sort=False)
 
+    # -------- 逐分面绘图 --------
     for facet_vals, g in groups:
-        # 排序
+        # 全局 x 取值（升序、去重、nan 去除）
         g_sorted = g.sort_values(by=x, kind='mergesort')
-        xs = g_sorted[x].values
+        xs_unique = pd.unique(g_sorted[x])
+        xs_unique = [v for v in xs_unique if pd.notna(v)]
+        xs_unique = sorted(xs_unique)
+        if len(xs_unique) == 0:
+            print("[plot_normality_reject_rate_curve] 该分面组无有效 x，跳过。")
+            continue
 
-        # 建图
-        plt.figure(figsize=(7.5, 5))
-        for y_col in ys:
-            if y_col in g_sorted.columns:
-                plt.plot(xs, g_sorted[y_col].values, marker='o', label=y_col)
+        # 用“离散索引”承载横轴，真实取值作为刻度标签
+        x_idx = np.arange(len(xs_unique))
+        xticklabels = [str(v) for v in xs_unique]
 
-        plt.ylim(0, 1)
+        # 为不同系列准备“微抖动”偏移，避免重叠（数量自适应）
+        k = max(1, len(ys))
+        # 让偏移在 [-0.18, 0.18] 之间均匀分布（与柱状图并列思路一致）
+        offsets = np.linspace(-0.18, 0.18, k)
+
+        plt.figure(figsize=(7.8, 5.2))
+        handled_any = False
+
+        for j, y_col in enumerate(ys):
+            if y_col not in g_sorted.columns:
+                print(f"  [Skip] 缺列 {y_col}")
+                continue
+
+            # 对齐到全局 xs：缺失位置填 NaN，这样线会断开，能直观看到“无数据”
+            gi = g_sorted[[x, y_col]].drop_duplicates(subset=[x])
+            gi = gi.set_index(x).reindex(xs_unique)
+            y_vals = gi[y_col].to_numpy(dtype=float)
+
+            # 非 NaN 的个数便于诊断
+            n_valid = int(np.isfinite(y_vals).sum())
+            print(f"  [Series] {y_col}: n_valid={n_valid}, xs={xticklabels}")
+
+            if n_valid == 0:
+                # 完全无数据，不画，但需要在日志中标记
+                print(f"  [Warn] 系列 {y_col} 在该分面组全为缺失，跳过绘制。")
+                continue
+
+            # 采用带抖动的折线 + 散点：
+            xi = x_idx + offsets[j]
+            plt.plot(
+                xi, y_vals, marker='o', linewidth=1.6, markersize=4.5,
+                label=f"{y_col} (n={n_valid})", alpha=0.95
+            )
+            # 为强调观测点，再叠一层半透明散点（可区分重叠 vs. 无绘制）
+            plt.scatter(xi, y_vals, s=18, alpha=0.65)
+            handled_any = True
+
+        if not handled_any:
+            print("[plot_normality_reject_rate_curve] 该分面组所有系列均无可绘制数据，跳过保存。")
+            plt.close()
+            continue
+
+        # 轴 & 标题 & 装饰
+        plt.ylim(0.0, 1.0)
+        plt.xlim(x_idx.min() - 0.6, x_idx.max() + 0.6)
+        plt.xticks(x_idx, xticklabels)
         plt.xlabel(x)
         plt.ylabel("Reject Rate")
-        # 标题与文件名后缀
+
         if facet_by:
-            kv = [f"{k}={v}" for k, v in zip(facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,)))]
+            kv = [f"{k}={v}" for k, v in zip(
+                facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,))
+            )]
             title_suffix = " | ".join(kv)
-            fname_suffix = "__" + "_".join([f"{k}-{str(v)}" for k, v in zip(facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,)))])
+            fname_suffix = "__" + "_".join([f"{k}-{str(v)}" for k, v in zip(
+                facet_by, (facet_vals if isinstance(facet_vals, tuple) else (facet_vals,))
+            )])
         else:
-            title_suffix = "all"
-            fname_suffix = "__all"
+            title_suffix, fname_suffix = "all", "__all"
 
         plt.title(f"Normality Reject Rate Curves ({title_suffix})")
-        plt.grid(alpha=0.25)
+        plt.grid(alpha=0.28, linestyle='--', linewidth=0.6)
         plt.legend(frameon=False, fontsize=9)
         plt.tight_layout()
 
         safe_name = re.sub(r"[^\w\-_.\u4e00-\u9fa5]", "_", fname_suffix)
         out_path = os.path.join(out_dir, f"NormalityRejectCurve{safe_name}.png")
-        plt.savefig(out_path)
+        plt.savefig(out_path, dpi=130)
         plt.close()
         print(f"[Plot] {out_path}")
 
