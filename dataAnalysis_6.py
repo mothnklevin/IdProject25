@@ -685,11 +685,6 @@ def facet_single_factor(agg_csv_path: str,
     keep = [c for c in keep if c in df.columns]
     work = df[keep].copy()
 
-    # # 强制把六个指标转为数值，避免 groupby.mean(numeric_only=True) 丢弃列
-    # for m in METRIC_COLS:
-    #     if m in work.columns:
-    #         work[m] = pd.to_numeric(work[m], errors='coerce')
-
     grp = (
         work.groupby([facet_dim, x_axis, block_dim, 'config_name', factor],
                      dropna=False, as_index=False)
@@ -745,7 +740,6 @@ def facet_single_factor(agg_csv_path: str,
     annot_fs = 7
 
     for metric in METRIC_COLS:
-        print(grp.columns.tolist())
         if metric not in grp.columns:
             continue
 
@@ -753,6 +747,7 @@ def facet_single_factor(agg_csv_path: str,
         for ar in axes:
             for ax in ar:
                 ax.clear()
+        # fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h), squeeze=False)
 
         # ===== 每个子图 =====
         for idx_f, fval in enumerate(facets if len(facets) > 0 else [None]):
@@ -840,10 +835,10 @@ def facet_single_factor(agg_csv_path: str,
 
         # 给 suptitle+legend 腾空间，减小子图区域
         fig.subplots_adjust(top=0.90)          # 顶部留白
-        plt.tight_layout(rect=[0, 0, 1, 0.90])  # 子图布局在 0.90 以下
+        fig.tight_layout(rect=[0, 0, 1, 0.90])  # 子图布局在 0.90 以下
 
         out_file = os.path.join(out_dir, f"{metric}__{facet_dim}__{x_axis}__{factor}.png")
-        plt.savefig(out_file, dpi=220)
+        fig.savefig(out_file, dpi=220)
         plt.close(fig)
         print(f"[Plot] {out_file}")
 
@@ -954,6 +949,7 @@ def facet_by_configs(agg_csv_path: str,
         for ar in axes:
             for ax in ar:
                 ax.clear()
+        # fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h), squeeze=False)
 
         for idx_f, fval in enumerate(facets if len(facets) > 0 else [None]):
             ax = axes[idx_f][0]
@@ -1025,10 +1021,11 @@ def facet_by_configs(agg_csv_path: str,
                    fontsize=legend_fs, frameon=False)
 
         fig.subplots_adjust(top=0.90)
-        plt.tight_layout(rect=[0, 0, 1, 0.90])
+        fig.tight_layout(rect=[0, 0, 1, 0.90])
 
         out_file = os.path.join(out_dir, f"{metric}__facet_{facet_dim}__x_{x_axis}__configs.png")
-        plt.savefig(out_file, dpi=220)
+        print(f"[DBG] metric={metric}, fig_num={fig.number}, axes_count={len(fig.axes)}")
+        fig.savefig(out_file, dpi=220)
         plt.close(fig)
         print(f"[Plot] {out_file}")
 
@@ -1036,8 +1033,8 @@ def facet_by_configs(agg_csv_path: str,
 
 
 if __name__ == "__main__":
-    root_dir = "./exp_4"
-    # root_dir = "./result"
+    # root_dir = "./exp_4"
+    root_dir = "./result"
     choose_num = 3
     if choose_num ==1:
         collect_and_merge_results(root_dir)
@@ -1063,17 +1060,17 @@ if __name__ == "__main__":
     elif choose_num == 3:
         facet_parameter = 'interaction'
         agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
-        out_dir = os.path.join(root_dir, "DataAnalysis", facet_parameter)
+        out_dir = os.path.join(root_dir, "DataAnalysis", "d_dim",facet_parameter)
         if os.path.exists(agg_file):
             # 横轴：样本量
             facet_single_factor(
                 agg_csv_path=agg_file,
                 out_dir=out_dir,
                 factor=facet_parameter,
-                x_axis='n_samples',
-                facet_dim='d_dim',
+                x_axis='d_dim',
+                facet_dim='n_samples',
                 n_samples=[50, 100, 200, 400, 800],
-                d_dim=[10, 20, 30],
+                d_dim=[3, 5, 10, 20, 30],
                 dgp_num=[2, 3]
             )
             # # 横轴：维度数
