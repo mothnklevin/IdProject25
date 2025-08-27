@@ -449,4 +449,4 @@ def main(root_dir, model_num = 1):
 # 当以脚本方式运行时，调用主函数
 # model_num =1： 直接读取并绘图； model_num =2： 重新计算并绘图
 if __name__ == "__main__":
-    results = main(root_dir = "./exp_5", model_num=1)
+    results = main(root_dir = "./exp_600", model_num=1)
