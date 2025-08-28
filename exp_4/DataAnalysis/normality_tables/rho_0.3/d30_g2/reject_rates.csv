@@ -1,0 +1,6 @@
+﻿config_name,n_samples,d_dim,dgp_num,reject_rate_shapiro,reject_rate_ad,reject_rate_both
+rho_0.3,100,30,2,0.0,0.0,0.0
+rho_0.3,200,30,2,0.0,0.0,0.0
+rho_0.3,400,30,2,0.0,0.0,0.0
+rho_0.3,50,30,2,0.0,0.0,0.0
+rho_0.3,800,30,2,0.0,0.0,0.0

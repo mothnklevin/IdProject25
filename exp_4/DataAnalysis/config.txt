@@ -1,0 +1,29 @@
+DML config
+    'N_SAMPLES': [50, 100, 200, 400, 800],
+    'D_DIM': [10, 20, 30], # 0,1结构需要>=3
+    'DGP_NUM': [2, 3],
+    'N_RUNS': [100]
+
+config
+
+0_基准
+
+inter_0.25
+inter_0.5
+inter_1.0
+
+hete_0.15
+hete_0.3
+hete_0.5
+
+noise_0.5
+noise_1.0
+noise_2.0
+
+rho_0.3
+rho_0.5
+rho_0.7
+
+s1_0.5
+s1_1.0
+s1_2.0

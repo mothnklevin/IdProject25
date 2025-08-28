@@ -1,0 +1,6 @@
+﻿config_name,n_samples,d_dim,dgp_num,reject_rate_shapiro,reject_rate_ad,reject_rate_both
+hete_0.5,100,10,2,0.0,0.0,0.0
+hete_0.5,200,10,2,0.0,0.0,0.0
+hete_0.5,400,10,2,0.0,0.0,0.0
+hete_0.5,50,10,2,0.0,0.0,0.0
+hete_0.5,800,10,2,0.0,0.0,0.0

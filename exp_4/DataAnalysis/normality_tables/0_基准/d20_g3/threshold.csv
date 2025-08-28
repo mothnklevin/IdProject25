@@ -1,0 +1,2 @@
+﻿config_name,d_dim,dgp_num,N_star,bias_at_N,rmse_at_N,var_at_N,cov_at_N,rej_at_N,rej_norm_both_at_N,status,cov_max,n_at_cov_max,rej_min,n_at_rej_min
+0_基准,20,3,100,-0.032118105860998,0.1055541932075351,0.0101101149795953,0.91,0.09,0.0,ok,,,,

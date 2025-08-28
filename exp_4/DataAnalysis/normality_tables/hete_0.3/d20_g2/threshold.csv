@@ -1,0 +1,2 @@
+﻿config_name,d_dim,dgp_num,N_star,bias_at_N,rmse_at_N,var_at_N,cov_at_N,rej_at_N,rej_norm_both_at_N,status,cov_max,n_at_cov_max,rej_min,n_at_rej_min
+hete_0.3,20,2,200,-0.0024459204342588,0.0985430618674182,0.009704752515435,0.95,0.05,0.0,ok,,,,

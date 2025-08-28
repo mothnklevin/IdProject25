@@ -1,0 +1,6 @@
+﻿config_name,n_samples,d_dim,dgp_num,reject_rate_shapiro,reject_rate_ad,reject_rate_both
+0_基准,100,30,2,0.0,0.0,0.0
+0_基准,200,30,2,0.0,0.0,0.0
+0_基准,400,30,2,1.0,0.0,0.0
+0_基准,50,30,2,0.0,0.0,0.0
+0_基准,800,30,2,0.0,0.0,0.0

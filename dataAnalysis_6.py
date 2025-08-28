@@ -1033,12 +1033,14 @@ def facet_by_configs(agg_csv_path: str,
 
 
 if __name__ == "__main__":
-    # root_dir = "./exp_4"
-    root_dir = "./result"
-    choose_num = 3
+    root_dir = "./exp_6"
+    # root_dir = "./result"
+    choose_num = 1
     if choose_num ==1:
+        # 数据汇总
         collect_and_merge_results(root_dir)
     elif choose_num == 2:
+        # 数据分析可视化草案
         agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
         if os.path.exists(agg_file):
             # preferred_cols = [
@@ -1058,6 +1060,7 @@ if __name__ == "__main__":
                 d_dim=30,
             )
     elif choose_num == 3:
+        # 单参数分析可视化
         facet_parameter = 'interaction'
         agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
         out_dir = os.path.join(root_dir, "DataAnalysis", "d_dim",facet_parameter)
@@ -1088,6 +1091,7 @@ if __name__ == "__main__":
             print("path not exist")
 
     elif choose_num == 4:
+        # 多参数分析可视化
         facet_parameter = 'ind'
         agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
         out_dir = os.path.join(root_dir, "DataAnalysis", facet_parameter)

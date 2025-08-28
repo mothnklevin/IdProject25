@@ -1,0 +1,2 @@
+﻿config_name,d_dim,dgp_num,N_star,bias_at_N,rmse_at_N,var_at_N,cov_at_N,rej_at_N,rej_norm_both_at_N,status,cov_max,n_at_cov_max,rej_min,n_at_rej_min
+s1_0.5,30,2,100,0.000509586171483,0.213819654305421,0.0457185848892236,0.9,0.1,0.0,ok,,,,
