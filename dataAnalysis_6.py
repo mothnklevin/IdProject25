@@ -1035,7 +1035,7 @@ def facet_by_configs(agg_csv_path: str,
 if __name__ == "__main__":
     # root_dir = "./exp_6"
     root_dir = "./result"
-    choose_num = 3
+    choose_num = 4
     if choose_num ==1:
         # 数据汇总
         collect_and_merge_results(root_dir)
@@ -1092,21 +1092,33 @@ if __name__ == "__main__":
 
     elif choose_num == 4:
         # 多参数分析可视化
-        facet_parameter = 'ind'
-        agg_file = os.path.join(root_dir, "DataAnalysis", "all_results.csv")
-        out_dir = os.path.join(root_dir, "DataAnalysis", facet_parameter)
+        facet_parameter = 'skewness'
+        agg_file = os.path.join(root_dir, "DataAnalysis", "all_results_nodirect.csv")
+        out_dir = os.path.join(root_dir, "DataAnalysis", "d_dim",facet_parameter)
         if os.path.exists(agg_file):
             # 横轴：样本量
+            # facet_by_configs(
+            #     agg_csv_path=agg_file,
+            #     out_dir=out_dir,
+            #     configs=['ind_nl_mD', 'ind_nl_mY', 'ind_nl_both'],  # 多参数打包配置
+            #     x_axis='d_dim',  # 横轴：样本量
+            #     facet_dim='n_samples',  # 子图：不同 d_dim n_samples
+            #     n_samples=[50, 100, 200, 400, 800],
+            #     d_dim=[3, 5, 10, 20, 30, 50, 100],
+            #     dgp_num=[2, 3]  # 同图内分块：DGP2 | DGP3
+            # )
+
             facet_by_configs(
                 agg_csv_path=agg_file,
                 out_dir=out_dir,
-                configs=['ind_nl_mD', 'ind_nl_mY', 'ind_nl_both'],  # 多参数打包配置
-                x_axis='n_samples',  # 横轴：样本量
-                facet_dim='d_dim',  # 子图：不同 d_dim
+                configs=['ind_skew_Dpos', 'ind_skew_Dneg', 'ind_skew_Y'],  # 多参数打包配置
+                x_axis='d_dim',  # 横轴：样本量/维度数
+                facet_dim='n_samples',  # 子图：不同 d_dim / n_samples
                 n_samples=[50, 100, 200, 400, 800],
-                d_dim=[10, 20, 30],
+                d_dim=[3, 5, 10, 20, 30, 50, 100],
                 dgp_num=[2, 3]  # 同图内分块：DGP2 | DGP3
             )
+
         else:
             print("path not exist")
 
