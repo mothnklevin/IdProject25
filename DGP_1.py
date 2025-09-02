@@ -95,9 +95,8 @@ def generate_dgp(n: int, d: int, dgp_num: int = 0, cfg: Dict[str, Any] | None = 
         # first_col = (C['rho'] ** np.arange(d))        # Toeplitz 第一列：rho^{|j|}
         # Sigma = toeplitz(first_col)                   # 构造协方差矩阵 Σ
         # L = np.linalg.cholesky(Sigma)                 # Cholesky 分解：Σ = L L^T
-        # X = rng.standard_normal(size=(n, d)) @ L.T    # 生成相关正态：Z L^T
         L = _get_cholesky_toeplitz(d, float(C['rho']))  # 读取缓存结果
-        X = rng.standard_normal(size=(n, d)) @ L.T
+        X = rng.standard_normal(size=(n, d)) @ L.T      # 生成相关正态：Z L^T
 
     elif dgp_num == 3:
         np.random.seed(seed)

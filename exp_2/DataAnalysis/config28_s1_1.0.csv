@@ -1,2 +1,0 @@
-﻿config_index,config_name,n_samples,d_dim,dgp_num,n_runs,nonlinearity,interaction,sparse_k,skewness,heterogeneous,true_effect,noise_std,bias,rmse,variance,coverage_rate,rejection_rate,mean_estimate
-28,s1_1.0,100,10,3,100,0.0,0.0,0,0.3,0.0,1.0,1.0,-0.0589389284699889,0.1363907701134958,0.0151286448829619,0.84,1.0,0.9410610715300112
